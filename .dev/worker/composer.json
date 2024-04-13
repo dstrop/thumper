@@ -1,0 +1,12 @@
+{
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../../"
+        }
+    ],
+    "require": {
+        "dstrop/thumper": "@dev",
+        "tracy/tracy": "^2.10"
+    }
+}

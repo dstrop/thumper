@@ -1,0 +1,85 @@
+version: '3'
+rpc:
+    listen: 'tcp://127.0.0.1:6001'
+
+server:
+    command: 'php worker.php'
+    relay: pipes
+
+thumper:
+  pool:
+    num_workers: 1
+    max_worker_memory: 100
+
+  x-default-consumer: &default-consumer
+    concurrency: 1
+
+    prefetch: 10
+    priority: 3
+    durable: true
+    requeue_on_fail: true
+
+  consumers:
+    - <<: *default-consumer
+      amqp: default # default value `default`
+      queue: queue1
+    - <<: *default-consumer
+      queue: queue2
+    - <<: *default-consumer
+      amqp: left
+      queue: queue1
+
+  amqp:
+    addr: amqp://user:password@rabbitmq:5672
+
+    queue:
+      queue1:
+        durable: true
+        autoDelete: false
+        exclusive: false
+        noWait: false
+        args:
+          x-key1: value1
+          x-key2: value2
+      queue2:
+        durable: true
+        autoDelete: false
+        exclusive: false
+        noWait: false
+        args:
+          x-key1: value1
+          x-key2: value2
+    exchange:
+      exchange1:
+        kind: direct
+        durable: true
+        autoDelete: false
+        internal: false
+        noWait: false
+        args:
+          x-key1: value1
+          x-key2: value2
+      exchange2:
+        kind: direct
+        durable: true
+        autoDelete: false
+        internal: false
+        noWait: false
+        args:
+          x-key1: value1
+          x-key2: value2
+    queueBind:
+      - queue: queue1
+        exchange: exchange1
+        key: key1
+        noWait: false
+        args:
+          x-key1: value1
+          x-key2: value2
+      - queue: queue2
+        exchange: exchange2
+        key: key2
+        noWait: false
+        args:
+          x-key1: value1
+          x-key2: value2

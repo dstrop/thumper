@@ -1,0 +1,54 @@
+<?xml version="1.0"?>
+<ruleset>
+<!--    <description>PSR12 with some extra modifications</description>-->
+
+<!--    <file>.</file>-->
+<!--    <exclude-pattern>./vendor/*</exclude-pattern>-->
+<!--    <exclude-pattern>./node_modules/*</exclude-pattern>-->
+<!--    <exclude-pattern>*/temp/*</exclude-pattern>-->
+<!--    <exclude-pattern>*/log/*</exclude-pattern>-->
+
+<!--    <arg name="colors"/>-->
+<!--    <arg name="extensions" value="php"/>-->
+<!--    <arg name="tab-width" value="4" />-->
+
+    <config name="installed_paths" value="vendor/slevomat/coding-standard"/>
+
+    <file>.</file>
+    <exclude-pattern>./vendor/*</exclude-pattern>
+
+    <rule ref="PSR12">
+        <exclude name="PSR12.Files.OpenTag.NotAlone"/>
+        <exclude name="PSR12.Files.FileHeader.SpacingAfterBlock"/>
+    </rule>
+
+    <rule ref="SlevomatCodingStandard.TypeHints.DeclareStrictTypes">
+        <properties>
+            <property name="declareOnFirstLine" value="true"/>
+            <property name="spacesCountAroundEqualsSign" value="0"/>
+        </properties>
+    </rule>
+
+<!--    <rule ref="SlevomatCodingStandard.TypeHints.DeclareStrictTypes">-->
+<!--        <properties>-->
+<!--&lt;!&ndash;            <property name="newlinesCountBetweenOpenTagAndDeclare" value="-1"/>&ndash;&gt;-->
+<!--&lt;!&ndash;            <property name="newlinesCountAfterDeclare" value="2"/>&ndash;&gt;-->
+<!--            <property name="spacesCountAroundEqualsSign" value="0"/>-->
+<!--        </properties>-->
+<!--    </rule>-->
+
+    <!-- Slevomat - too risky rules for now
+    <rule ref="SlevomatCodingStandard.TypeHints.DeclareStrictTypes">
+        <properties>
+            <property name="declareOnFirstLine" value="true"/>
+            <property name="spacesCountAroundEqualsSign" value="0"/>
+        </properties>
+    </rule>
+    <rule ref="SlevomatCodingStandard.Functions.StrictCall" />
+    <rule ref="SlevomatCodingStandard.Functions.UnusedParameter" />
+    <rule ref="SlevomatCodingStandard.Variables.UselessVariable" />
+    <rule ref="SlevomatCodingStandard.Arrays.AlphabeticallySortedByKeys" />
+    <rule ref="SlevomatCodingStandard.Arrays.DisallowPartiallyKeyed" />
+    -->
+
+</ruleset>
