@@ -3,7 +3,7 @@ rpc:
     listen: 'tcp://127.0.0.1:6001'
 
 server:
-    command: 'php worker.php'
+    command: 'php consumer.php'
     relay: pipes
 
 thumper:
@@ -33,7 +33,7 @@ thumper:
     addr: amqp://user:password@rabbitmq:5672
 
     queue:
-      queue1:
+      - name: queue1
         durable: true
         autoDelete: false
         exclusive: false
@@ -41,7 +41,7 @@ thumper:
         args:
           x-key1: value1
           x-key2: value2
-      queue2:
+      - name: queue2
         durable: true
         autoDelete: false
         exclusive: false
@@ -50,7 +50,7 @@ thumper:
           x-key1: value1
           x-key2: value2
     exchange:
-      exchange1:
+      - name: exchange1
         kind: direct
         durable: true
         autoDelete: false
@@ -59,7 +59,7 @@ thumper:
         args:
           x-key1: value1
           x-key2: value2
-      exchange2:
+      - name: exchange2
         kind: direct
         durable: true
         autoDelete: false

@@ -47,6 +47,8 @@ func (p *Plugin) Init(cfg common.Configurer, log common.Logger, srv common.Serve
 		return errors.E(op, err)
 	}
 
+	p.cfg.ExpandEnv()
+
 	if p.cfg.Amqp == nil {
 		return errors.E(op, errors.Disabled)
 	}
@@ -131,9 +133,9 @@ func (p *Plugin) Serve() chan error {
 }
 
 func (p *Plugin) declare() error {
-	for queue, queueConfig := range p.cfg.Amqp.Queue {
+	for _, queueConfig := range p.cfg.Amqp.Queue {
 		err := p.client.DeclareQueue(
-			queue,
+			queueConfig.Name,
 			queueConfig.Durable,
 			queueConfig.AutoDelete,
 			queueConfig.Exclusive,
@@ -141,13 +143,13 @@ func (p *Plugin) declare() error {
 			queueConfig.Args,
 		)
 		if err != nil {
-			return fmt.Errorf("failed to declare queue %s: %w", queue, err)
+			return fmt.Errorf("failed to declare queue %s: %w", queueConfig.Name, err)
 		}
 	}
 
-	for exchange, exchangeConfig := range p.cfg.Amqp.Exchange {
+	for _, exchangeConfig := range p.cfg.Amqp.Exchange {
 		err := p.client.DeclareExchange(
-			exchange,
+			exchangeConfig.Name,
 			exchangeConfig.Kind,
 			exchangeConfig.Durable,
 			exchangeConfig.AutoDelete,
@@ -156,7 +158,7 @@ func (p *Plugin) declare() error {
 			exchangeConfig.Args,
 		)
 		if err != nil {
-			return fmt.Errorf("failed to declare exchange %s: %w", exchange, err)
+			return fmt.Errorf("failed to declare exchange %s: %w", exchangeConfig.Name, err)
 		}
 	}
 
