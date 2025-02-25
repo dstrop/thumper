@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Define Go version and install
-ARG GO_VERSION=1.22.4
+ARG GO_VERSION
 
 RUN wget https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz -O go.tar.gz \
     && tar -C /usr/local -xzf go.tar.gz \
@@ -25,6 +25,6 @@ ENV GOFLAGS="-mod=mod"
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 
-COPY --from=golangci/golangci-lint:v1.59.1-alpine /usr/bin/golangci-lint /usr/local/bin/golangci-lint
+COPY --from=golangci/golangci-lint:v1.64.5-alpine /usr/bin/golangci-lint /usr/local/bin/golangci-lint
 
 RUN go install github.com/cespare/reflex@v0.3

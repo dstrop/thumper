@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"github.com/dstrop/thumper/amqp"
+	"github.com/dstrop/thumper/common"
 	"github.com/roadrunner-server/errors"
-	"github.com/roadrunner-server/http/v4/common"
-	"github.com/roadrunner-server/sdk/v4/state/process"
+	"github.com/roadrunner-server/pool/state/process"
 	"go.uber.org/zap"
 	"sync"
 )

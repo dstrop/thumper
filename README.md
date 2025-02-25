@@ -20,7 +20,6 @@ Copy the [.env.example](.env.example) file to `.env` and fill in your github tok
 ```bash
 docker compose run --rm \
     -e RT_TOKEN=read_only_github_token \
-    -e VERSION="v2024.1.3-thumper-$TAG" \
     -e TIME="$(date +%FT%T%z)" \
     -e GOOS=linux \
     -e GOARCH=amd64 \
@@ -32,8 +31,10 @@ docker compose run --rm \
 To use a custom Velox configuration, add this plugin to the `plugins` section of your `velox_rr.toml` file:
 
 ```toml
-[plugins]
-thumper = { ref = "v0.0.0", owner = "dstrop", repository = "thumper" }
+[github.plugins.thumper]
+ref = "v0.0.0"
+owner = "dstrop"
+repository = "thumper"
 ```
 
 Replace `v0.0.0` with the actual version you want to use. You can find the version by checking the latest tags in the `thumper` repository.

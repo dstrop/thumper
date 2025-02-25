@@ -1,8 +1,8 @@
 package thumper
 
 import (
-	"github.com/roadrunner-server/config/v4"
-	"github.com/roadrunner-server/sdk/v4/pool"
+	"github.com/roadrunner-server/config/v5"
+	"github.com/roadrunner-server/pool/pool"
 	"os"
 )
 
