@@ -9,7 +9,12 @@ server:
 thumper:
   pool:
     num_workers: 1
-    max_worker_memory: 100
+
+    supervisor:
+      ttl: 2h
+      idle_ttl: 30m
+      exec_ttl: 10m
+      max_worker_memory: 800
 
   x-default-consumer: &default-consumer
     concurrency: 1

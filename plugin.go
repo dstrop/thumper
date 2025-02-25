@@ -47,6 +47,7 @@ func (p *Plugin) Init(cfg common.Configurer, log common.Logger, srv common.Serve
 		return errors.E(op, err)
 	}
 
+	p.cfg.InitDefaults()
 	p.cfg.ExpandEnv()
 
 	if p.cfg.Amqp == nil {
@@ -134,6 +135,7 @@ func (p *Plugin) Serve() chan error {
 
 func (p *Plugin) declare() error {
 	for _, queueConfig := range p.cfg.Amqp.Queue {
+		p.log.Debug("declaring queue", zap.Any("queue", queueConfig))
 		err := p.client.DeclareQueue(
 			queueConfig.Name,
 			queueConfig.Durable,
@@ -148,6 +150,7 @@ func (p *Plugin) declare() error {
 	}
 
 	for _, exchangeConfig := range p.cfg.Amqp.Exchange {
+		p.log.Debug("declaring exchange", zap.Any("exchange", exchangeConfig))
 		err := p.client.DeclareExchange(
 			exchangeConfig.Name,
 			exchangeConfig.Kind,
@@ -163,6 +166,7 @@ func (p *Plugin) declare() error {
 	}
 
 	for _, bindQueueConfig := range p.cfg.Amqp.QueueBind {
+		p.log.Debug("binding queue", zap.Any("queue", bindQueueConfig.Queue), zap.Any("exchange", bindQueueConfig.Exchange))
 		err := p.client.BindQueue(
 			bindQueueConfig.Queue,
 			bindQueueConfig.Exchange,
