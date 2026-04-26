@@ -25,6 +25,6 @@ ENV GOFLAGS="-mod=mod"
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 
-COPY --from=golangci/golangci-lint:v1.64.5-alpine /usr/bin/golangci-lint /usr/local/bin/golangci-lint
+COPY --from=golangci/golangci-lint:v2.11.4-alpine /usr/bin/golangci-lint /usr/local/bin/golangci-lint
 
 RUN go install github.com/cespare/reflex@v0.3

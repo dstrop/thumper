@@ -2,11 +2,12 @@ package amqp
 
 import (
 	"fmt"
-	amqp "github.com/rabbitmq/amqp091-go"
-	"go.uber.org/zap"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	amqp "github.com/rabbitmq/amqp091-go"
+	"go.uber.org/zap"
 )
 
 type consumer struct {
@@ -136,7 +137,7 @@ func (c *consumer) redial(out chan Delivery) {
 			break
 		}
 
-		go c.ch.Close()
+		go func() { _ = c.ch.Close() }()
 		// TODO: configurable reconnect interval, and consider progressive backoff
 		time.Sleep(3 * time.Second)
 	}

@@ -1,6 +1,5 @@
-FROM ghcr.io/roadrunner-server/roadrunner:2024.3.4
+FROM ghcr.io/roadrunner-server/roadrunner:2025.1.13
 
 ARG TARGETARCH
 
-COPY ./rr-${TARGETARCH} /usr/bin/rr
-RUN  chmod a+x /usr/bin/rr
+COPY --chmod=755 --chown=0:0 ./rr-${TARGETARCH} /usr/bin/rr

@@ -1,4 +1,6 @@
-<?php declare(strict_types=1);
+<?php
+
+declare(strict_types=1);
 
 namespace Thumper;
 
@@ -14,6 +16,5 @@ class Message
         public readonly string $exchange,
         public readonly string $routingKey,
         public readonly int $deliveryTag,
-    ) {
-    }
+    ) {}
 }

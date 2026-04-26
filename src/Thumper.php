@@ -1,4 +1,6 @@
-<?php declare(strict_types=1);
+<?php
+
+declare(strict_types=1);
 
 namespace Thumper;
 
@@ -23,12 +25,12 @@ class Thumper implements ThumperInterface
         string $key,
         string $contentType,
         string $message,
-        array $headers = []
+        array $headers = [],
     ): void {
         $payload = \compact('exchange', 'key', 'contentType', 'message');
 
-        foreach (\array_keys($headers) as $key) {
-            if (!\is_string($key)) {
+        foreach (\array_keys($headers) as $headerKey) {
+            if (!\is_string($headerKey)) { // @phpstan-ignore function.alreadyNarrowedType
                 throw new \TypeError('Header keys must be strings');
             }
         }
@@ -49,12 +51,12 @@ class Thumper implements ThumperInterface
         bool $autoDelete = false,
         bool $internal = false,
         bool $noWait = false,
-        array $args = []
+        array $args = [],
     ): void {
         $payload = \compact('name', 'type', 'durable', 'autoDelete', 'internal', 'noWait');
 
-        foreach (\array_keys($args) as $key) {
-            if (!\is_string($key)) {
+        foreach (\array_keys($args) as $argKey) {
+            if (!\is_string($argKey)) { // @phpstan-ignore function.alreadyNarrowedType
                 throw new \TypeError('Argument keys must be strings');
             }
         }
@@ -74,12 +76,12 @@ class Thumper implements ThumperInterface
         bool $autoDelete = false,
         bool $exclusive = false,
         bool $noWait = false,
-        array $args = []
+        array $args = [],
     ): void {
         $payload = \compact('name', 'durable', 'autoDelete', 'exclusive', 'noWait');
 
-        foreach (\array_keys($args) as $key) {
-            if (!\is_string($key)) {
+        foreach (\array_keys($args) as $argKey) {
+            if (!\is_string($argKey)) { // @phpstan-ignore function.alreadyNarrowedType
                 throw new \TypeError('Argument keys must be strings');
             }
         }
@@ -98,12 +100,12 @@ class Thumper implements ThumperInterface
         string $exchange,
         string $key,
         bool $noWait = false,
-        array $args = []
+        array $args = [],
     ): void {
         $payload = \compact('queue', 'exchange', 'key', 'noWait');
 
-        foreach (\array_keys($args) as $key) {
-            if (!\is_string($key)) {
+        foreach (\array_keys($args) as $argKey) {
+            if (!\is_string($argKey)) { // @phpstan-ignore function.alreadyNarrowedType
                 throw new \TypeError('Argument keys must be strings');
             }
         }

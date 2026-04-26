@@ -1,5 +1,5 @@
 [roadrunner]
-ref = "v2024.3.4"
+ref = "v2025.1.13"
 
 [debug]
 enabled = false
@@ -11,170 +11,42 @@ mode = "production"
 [github.token]
 token = "${RT_TOKEN}"
 
-[github.plugins.appLogger]
-ref = "v5.1.4"
-owner = "roadrunner-server"
-repository = "app-logger"
-
-[github.plugins.logger]
-ref = "v5.1.4"
-owner = "roadrunner-server"
-repository = "logger"
-
-[github.plugins.lock]
-ref = "v5.1.4"
-owner = "roadrunner-server"
-repository = "lock"
-
-[github.plugins.rpc]
-ref = "v5.1.4"
-owner = "roadrunner-server"
-repository = "rpc"
-
-[github.plugins.centrifuge]
-ref = "v5.1.4"
-owner = "roadrunner-server"
-repository = "centrifuge"
-
-[github.plugins.temporal]
-ref = "v5.5.1"
-owner = "temporalio"
-repository = "roadrunner-temporal"
-
-[github.plugins.metrics]
-ref = "v5.1.4"
-owner = "roadrunner-server"
-repository = "metrics"
-
-[github.plugins.otel]
-ref = "v5.1.4"
-owner = "roadrunner-server"
-repository = "otel"
-
-[github.plugins.http]
-ref = "v5.2.3"
-owner = "roadrunner-server"
-repository = "http"
-
-[github.plugins.gzip]
-ref = "v5.1.4"
-owner = "roadrunner-server"
-repository = "gzip"
-
-[github.plugins.prometheus]
-ref = "v5.1.4"
-owner = "roadrunner-server"
-repository = "prometheus"
-
-[github.plugins.headers]
-ref = "v5.1.4"
-owner = "roadrunner-server"
-repository = "headers"
-
-[github.plugins.static]
-ref = "v5.1.3"
-owner = "roadrunner-server"
-repository = "static"
-
-[github.plugins.proxy]
-ref = "v5.1.4"
-owner = "roadrunner-server"
-repository = "proxy_ip_parser"
-
-[github.plugins.send]
-ref = "v5.1.3"
-owner = "roadrunner-server"
-repository = "send"
-
-[github.plugins.server]
-ref = "v5.2.5"
-owner = "roadrunner-server"
-repository = "server"
-
-[github.plugins.service]
-ref = "v5.1.4"
-owner = "roadrunner-server"
-repository = "service"
-
-[github.plugins.jobs]
-ref = "v5.1.4"
-owner = "roadrunner-server"
-repository = "jobs"
-
-[github.plugins.amqp]
-ref = "v5.1.4"
-owner = "roadrunner-server"
-repository = "amqp"
-
-[github.plugins.sqs]
-ref = "v5.1.4"
-owner = "roadrunner-server"
-repository = "sqs"
-
-[github.plugins.beanstalk]
-ref = "v5.1.4"
-owner = "roadrunner-server"
-repository = "beanstalk"
-
-[github.plugins.nats]
-ref = "v5.1.4"
-owner = "roadrunner-server"
-repository = "nats"
-
-[github.plugins.kafka]
-ref = "v5.1.4"
-owner = "roadrunner-server"
-repository = "kafka"
-
-[github.plugins.googlepubsub]
-ref = "v5.1.4"
-owner = "roadrunner-server"
-repository = "google-pub-sub"
-
-[github.plugins.kv]
-ref = "v5.2.4"
-owner = "roadrunner-server"
-repository = "kv"
-
-[github.plugins.boltdb]
-ref = "v5.1.4"
-owner = "roadrunner-server"
-repository = "boltdb"
-
-[github.plugins.memory]
-ref = "v5.2.4"
-owner = "roadrunner-server"
-repository = "memory"
-
-[github.plugins.redis]
-ref = "v5.1.4"
-owner = "roadrunner-server"
-repository = "redis"
-
-[github.plugins.memcached]
-ref = "v5.1.4"
-owner = "roadrunner-server"
-repository = "memcached"
-
-[github.plugins.fileserver]
-ref = "v5.1.4"
-owner = "roadrunner-server"
-repository = "fileserver"
-
-[github.plugins.grpc]
-ref = "v5.1.4"
-owner = "roadrunner-server"
-repository = "grpc"
-
-[github.plugins.status]
-ref = "v5.1.4"
-owner = "roadrunner-server"
-repository = "status"
-
-[github.plugins.tcp]
-ref = "v5.1.4"
-owner = "roadrunner-server"
-repository = "tcp"
+[github.plugins]
+informer = { owner = "roadrunner-server", repository = "informer", ref = "v5.1.9" }
+resetter = { owner = "roadrunner-server", repository = "resetter", ref = "v5.1.9" }
+lock = { owner = "roadrunner-server", repository = "lock", ref = "v5.1.9" }
+logger = { owner = "roadrunner-server", repository = "logger", ref = "v5.1.9" }
+appLogger = { owner = "roadrunner-server", repository = "app-logger", ref = "v5.1.9" }
+metrics = { owner = "roadrunner-server", repository = "metrics", ref = "v5.2.0" }
+rpcPlugin = { owner = "roadrunner-server", repository = "rpc", ref = "v5.1.9" }
+server = { owner = "roadrunner-server", repository = "server", ref = "v5.2.10" }
+service = { owner = "roadrunner-server", repository = "service", ref = "v5.1.9" }
+centrifuge = { owner = "roadrunner-server", repository = "centrifuge", ref = "v5.1.9" }
+jobs = { owner = "roadrunner-server", repository = "jobs", ref = "v5.1.9" }
+amqp = { owner = "roadrunner-server", repository = "amqp", ref = "v5.2.3" }
+sqs = { owner = "roadrunner-server", repository = "sqs", ref = "v5.1.9" }
+nats = { owner = "roadrunner-server", repository = "nats", ref = "v5.1.9" }
+kafka = { owner = "roadrunner-server", repository = "kafka", ref = "v5.2.5" }
+beanstalk = { owner = "roadrunner-server", repository = "beanstalk", ref = "v5.1.9" }
+gps = { owner = "roadrunner-server", repository = "google-pub-sub", ref = "v5.1.9" }
+httpPlugin = { owner = "roadrunner-server", repository = "http", ref = "v5.3.0" }
+static = { owner = "roadrunner-server", repository = "static", ref = "v5.2.0" }
+headers = { owner = "roadrunner-server", repository = "headers", ref = "v5.2.0" }
+status = { owner = "roadrunner-server", repository = "status", ref = "v5.1.9" }
+gzip = { owner = "roadrunner-server", repository = "gzip", ref = "v5.3.0" }
+prometheus = { owner = "roadrunner-server", repository = "prometheus", ref = "v5.2.0" }
+send = { owner = "roadrunner-server", repository = "send", ref = "v5.2.0" }
+proxyIP = { owner = "roadrunner-server", repository = "proxy_ip_parser", ref = "v5.1.9" }
+rrOtel = { owner = "roadrunner-server", repository = "otel", ref = "v5.5.0" }
+fileserver = { owner = "roadrunner-server", repository = "fileserver", ref = "v5.1.9" }
+grpcPlugin = { owner = "roadrunner-server", repository = "grpc", ref = "v5.3.0" }
+memory = { owner = "roadrunner-server", repository = "memory", ref = "v5.2.9" }
+boltdb = { owner = "roadrunner-server", repository = "boltdb", ref = "v5.1.9" }
+kv = { owner = "roadrunner-server", repository = "kv", ref = "v5.2.9" }
+memcached = { owner = "roadrunner-server", repository = "memcached", ref = "v5.1.9" }
+redis = { owner = "roadrunner-server", repository = "redis", ref = "v5.1.10" }
+tcp = { owner = "roadrunner-server", repository = "tcp", ref = "v5.1.9" }
+rrt = { owner = "temporalio", repository = "roadrunner-temporal", ref = "v5.10.0" }
 
 [github.plugins.thumper]
 ref = "master"

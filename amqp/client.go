@@ -3,11 +3,12 @@ package amqp
 import (
 	"context"
 	"fmt"
-	amqp "github.com/rabbitmq/amqp091-go"
-	"go.uber.org/zap"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	amqp "github.com/rabbitmq/amqp091-go"
+	"go.uber.org/zap"
 )
 
 type Table amqp.Table
@@ -106,7 +107,7 @@ func (c *Client) getChannel() (*confirmChannel, error) {
 			return ch, nil
 		}
 
-		go ch.ch.Close()
+		go func() { _ = ch.ch.Close() }()
 	}
 
 	// TODO: if reconnecting, we should return error or implement optional timeout

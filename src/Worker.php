@@ -1,4 +1,6 @@
-<?php declare(strict_types=1);
+<?php
+
+declare(strict_types=1);
 
 namespace Thumper;
 
@@ -19,8 +21,7 @@ class Worker implements WorkerInterface
 {
     public function __construct(
         private readonly SpiralWorkerInterface $worker,
-    ) {
-    }
+    ) {}
 
     public function getWorker(): SpiralWorkerInterface
     {
@@ -54,6 +55,6 @@ class Worker implements WorkerInterface
 
     public function respond(Response $response): void
     {
-        $this->worker->respond(new Payload((string)$response->value));
+        $this->worker->respond(new Payload((string) $response->value));
     }
 }

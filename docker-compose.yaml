@@ -36,7 +36,9 @@ services:
     command: ./consumer.sh
 
   velox:
-    image: ghcr.io/roadrunner-server/velox:2024.3.6
+    build:
+      context: .dev
+      dockerfile: Dockerfile.velox
     volumes:
       - .:/plugin
       - go-pkg:/root/go/pkg

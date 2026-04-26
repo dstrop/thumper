@@ -8,11 +8,11 @@
     "packages": [
         {
             "name": "dstrop/thumper",
-            "version": "dev-main",
+            "version": "dev-master",
             "dist": {
                 "type": "path",
                 "url": "../..",
-                "reference": "f9edac73b4508ad50008bf4a437c6f41f02e0d16"
+                "reference": "15989eee541a56e8dfcdf71884761ac2eba99e85"
             },
             "require": {
                 "spiral/goridge": "^4.2",
@@ -20,8 +20,8 @@
             },
             "require-dev": {
                 "php": "^8.2",
-                "phpcsstandards/php_codesniffer": "^3.10",
-                "phpstan/phpstan": "^1.11"
+                "phpstan/phpstan": "^2.0",
+                "squizlabs/php_codesniffer": "^4.0"
             },
             "type": "library",
             "autoload": {
@@ -31,7 +31,10 @@
             },
             "scripts": {
                 "phpcs": [
-                    "vendor/bin/phpcs --standard=PSR12 src"
+                    "vendor/bin/phpcs --standard=phpcs.xml"
+                ],
+                "phpcs-fix": [
+                    "vendor/bin/phpcbf --standard=phpcs.xml"
                 ],
                 "phpstan": [
                     "vendor/bin/phpstan analyse src --level=9"
@@ -43,16 +46,16 @@
         },
         {
             "name": "psr/log",
-            "version": "3.0.0",
+            "version": "3.0.2",
             "source": {
                 "type": "git",
                 "url": "https://github.com/php-fig/log.git",
-                "reference": "fe5ea303b0887d5caefd3d431c3e61ad47037001"
+                "reference": "f16e1d5863e37f8d8c2a01719f5b34baa2b714d3"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/php-fig/log/zipball/fe5ea303b0887d5caefd3d431c3e61ad47037001",
-                "reference": "fe5ea303b0887d5caefd3d431c3e61ad47037001",
+                "url": "https://api.github.com/repos/php-fig/log/zipball/f16e1d5863e37f8d8c2a01719f5b34baa2b714d3",
+                "reference": "f16e1d5863e37f8d8c2a01719f5b34baa2b714d3",
                 "shasum": ""
             },
             "require": {
@@ -87,37 +90,38 @@
                 "psr-3"
             ],
             "support": {
-                "source": "https://github.com/php-fig/log/tree/3.0.0"
+                "source": "https://github.com/php-fig/log/tree/3.0.2"
             },
-            "time": "2021-07-14T16:46:02+00:00"
+            "time": "2024-09-11T13:17:53+00:00"
         },
         {
             "name": "spiral/goridge",
-            "version": "v4.2.0",
+            "version": "4.2.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/roadrunner-php/goridge.git",
-                "reference": "c6696bd1834f5e88d1252a953a1336c041795411"
+                "reference": "2a372118dac1f0c0511e2862f963ce649fefd9fa"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/roadrunner-php/goridge/zipball/c6696bd1834f5e88d1252a953a1336c041795411",
-                "reference": "c6696bd1834f5e88d1252a953a1336c041795411",
+                "url": "https://api.github.com/repos/roadrunner-php/goridge/zipball/2a372118dac1f0c0511e2862f963ce649fefd9fa",
+                "reference": "2a372118dac1f0c0511e2862f963ce649fefd9fa",
                 "shasum": ""
             },
             "require": {
                 "ext-json": "*",
                 "ext-sockets": "*",
                 "php": ">=8.1",
-                "spiral/roadrunner": "^2023 || ^2024.1"
+                "spiral/roadrunner": "^2023 || ^2024.1 || ^2025.1"
             },
             "require-dev": {
-                "google/protobuf": "^3.22",
-                "infection/infection": "^0.26.1",
+                "google/protobuf": "^3.22 || ^4.0",
+                "infection/infection": "^0.29.0",
                 "jetbrains/phpstorm-attributes": "^1.0",
-                "phpunit/phpunit": "^10.0",
+                "phpunit/phpunit": "^10.5.45",
                 "rybakit/msgpack": "^0.7",
-                "vimeo/psalm": "^5.9"
+                "spiral/code-style": "*",
+                "vimeo/psalm": "^6.0"
             },
             "suggest": {
                 "ext-msgpack": "MessagePack codec support",
@@ -166,9 +170,8 @@
             "support": {
                 "chat": "https://discord.gg/V6EK4he",
                 "docs": "https://docs.roadrunner.dev",
-                "forum": "https://forum.roadrunner.dev/",
                 "issues": "https://github.com/roadrunner-server/roadrunner/issues",
-                "source": "https://github.com/roadrunner-php/goridge/tree/v4.2.0"
+                "source": "https://github.com/roadrunner-php/goridge/tree/4.2.1"
             },
             "funding": [
                 {
@@ -176,20 +179,20 @@
                     "type": "github"
                 }
             ],
-            "time": "2024-04-11T17:26:14+00:00"
+            "time": "2025-05-05T13:55:33+00:00"
         },
         {
             "name": "spiral/roadrunner",
-            "version": "v2024.1.2",
+            "version": "v2025.1.13",
             "source": {
                 "type": "git",
                 "url": "https://github.com/roadrunner-server/roadrunner.git",
-                "reference": "8e80f7ce055a7c56dedbb6af281ec2531e0c403f"
+                "reference": "cb5e9e331148fac77d2478134fa99e51838f24bb"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/roadrunner-server/roadrunner/zipball/8e80f7ce055a7c56dedbb6af281ec2531e0c403f",
-                "reference": "8e80f7ce055a7c56dedbb6af281ec2531e0c403f",
+                "url": "https://api.github.com/repos/roadrunner-server/roadrunner/zipball/cb5e9e331148fac77d2478134fa99e51838f24bb",
+                "reference": "cb5e9e331148fac77d2478134fa99e51838f24bb",
                 "shasum": ""
             },
             "type": "metapackage",
@@ -215,10 +218,9 @@
             "homepage": "https://roadrunner.dev/",
             "support": {
                 "chat": "https://discord.gg/V6EK4he",
-                "docs": "https://roadrunner.dev/docs",
-                "forum": "https://forum.roadrunner.dev/",
+                "docs": "https://docs.roadrunner.dev/",
                 "issues": "https://github.com/roadrunner-server/roadrunner/issues",
-                "source": "https://github.com/roadrunner-server/roadrunner/tree/v2024.1.2"
+                "source": "https://github.com/roadrunner-server/roadrunner/tree/v2025.1.13"
             },
             "funding": [
                 {
@@ -226,20 +228,20 @@
                     "type": "github"
                 }
             ],
-            "time": "2024-05-16T19:38:52+00:00"
+            "time": "2026-04-17T09:50:24+00:00"
         },
         {
             "name": "spiral/roadrunner-worker",
-            "version": "v3.5.0",
+            "version": "v3.6.2",
             "source": {
                 "type": "git",
                 "url": "https://github.com/roadrunner-php/worker.git",
-                "reference": "7c7411a301b9dade863634ab17ef01929adada6b"
+                "reference": "8d9905b1e6677f34ff8623893f35b5e2fa828e37"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/roadrunner-php/worker/zipball/7c7411a301b9dade863634ab17ef01929adada6b",
-                "reference": "7c7411a301b9dade863634ab17ef01929adada6b",
+                "url": "https://api.github.com/repos/roadrunner-php/worker/zipball/8d9905b1e6677f34ff8623893f35b5e2fa828e37",
+                "reference": "8d9905b1e6677f34ff8623893f35b5e2fa828e37",
                 "shasum": ""
             },
             "require": {
@@ -249,13 +251,14 @@
                 "php": ">=8.1",
                 "psr/log": "^2.0 || ^3.0",
                 "spiral/goridge": "^4.1.0",
-                "spiral/roadrunner": "^2023.1 || ^2024.1"
+                "spiral/roadrunner": "^2023.1 || ^2024.1 || ^2025.1"
             },
             "require-dev": {
+                "buggregator/trap": "^1.13",
                 "jetbrains/phpstorm-attributes": "^1.0",
-                "phpunit/phpunit": "^10.0",
-                "symfony/var-dumper": "^6.3 || ^7.0",
-                "vimeo/psalm": "^5.9"
+                "phpunit/phpunit": "^10.5.45",
+                "spiral/code-style": "^2.2",
+                "vimeo/psalm": "^6.0"
             },
             "suggest": {
                 "spiral/roadrunner-cli": "Provides RoadRunner installation and management CLI tools"
@@ -301,9 +304,8 @@
             "support": {
                 "chat": "https://discord.gg/V6EK4he",
                 "docs": "https://docs.roadrunner.dev",
-                "forum": "https://forum.roadrunner.dev/",
                 "issues": "https://github.com/roadrunner-server/roadrunner/issues",
-                "source": "https://github.com/roadrunner-php/worker/tree/v3.5.0"
+                "source": "https://github.com/roadrunner-php/worker/tree/v3.6.2"
             },
             "funding": [
                 {
@@ -311,50 +313,55 @@
                     "type": "github"
                 }
             ],
-            "time": "2024-03-29T08:06:36+00:00"
+            "time": "2025-05-05T12:34:50+00:00"
         },
         {
             "name": "tracy/tracy",
-            "version": "v2.10.7",
+            "version": "v2.11.4",
             "source": {
                 "type": "git",
                 "url": "https://github.com/nette/tracy.git",
-                "reference": "7e7b25ba103968d5318d37db330b2e9c755dc765"
+                "reference": "bbd4fa3a972c460cbeda11d6bbc350d0b5a39717"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/nette/tracy/zipball/7e7b25ba103968d5318d37db330b2e9c755dc765",
-                "reference": "7e7b25ba103968d5318d37db330b2e9c755dc765",
+                "url": "https://api.github.com/repos/nette/tracy/zipball/bbd4fa3a972c460cbeda11d6bbc350d0b5a39717",
+                "reference": "bbd4fa3a972c460cbeda11d6bbc350d0b5a39717",
                 "shasum": ""
             },
             "require": {
                 "ext-json": "*",
                 "ext-session": "*",
-                "php": ">=8.0 <8.4"
+                "php": "8.2 - 8.5"
             },
             "conflict": {
                 "nette/di": "<3.0"
             },
             "require-dev": {
-                "latte/latte": "^2.5",
+                "latte/latte": "^2.5 || ^3.0",
                 "nette/di": "^3.0",
                 "nette/http": "^3.0",
-                "nette/mail": "^3.0",
-                "nette/tester": "^2.2",
-                "nette/utils": "^3.0",
-                "phpstan/phpstan": "^1.0",
+                "nette/mail": "^3.0 || ^4.0",
+                "nette/phpstan-rules": "^1.0",
+                "nette/tester": "^2.6",
+                "nette/utils": "^3.0 || ^4.0",
+                "phpstan/extension-installer": "^1.4@stable",
+                "phpstan/phpstan": "^2.1@stable",
                 "psr/log": "^1.0 || ^2.0 || ^3.0"
             },
             "type": "library",
             "extra": {
                 "branch-alias": {
-                    "dev-master": "2.10-dev"
+                    "dev-master": "2.11-dev"
                 }
             },
             "autoload": {
                 "files": [
                     "src/Tracy/functions.php"
                 ],
+                "psr-4": {
+                    "Tracy\\": "src"
+                },
                 "classmap": [
                     "src"
                 ]
@@ -384,9 +391,9 @@
             ],
             "support": {
                 "issues": "https://github.com/nette/tracy/issues",
-                "source": "https://github.com/nette/tracy/tree/v2.10.7"
+                "source": "https://github.com/nette/tracy/tree/v2.11.4"
             },
-            "time": "2024-04-29T11:44:00+00:00"
+            "time": "2026-04-22T06:08:41+00:00"
         }
     ],
     "packages-dev": [],
@@ -397,7 +404,7 @@
     },
     "prefer-stable": false,
     "prefer-lowest": false,
-    "platform": [],
-    "platform-dev": [],
-    "plugin-api-version": "2.6.0"
+    "platform": {},
+    "platform-dev": {},
+    "plugin-api-version": "2.9.0"
 }

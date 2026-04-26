@@ -28,7 +28,9 @@ docker compose run --rm \
 
 ### Using custom velox config
 
-To use a custom Velox configuration, add this plugin to the `plugins` section of your `velox_rr.toml` file:
+You can use the [RoadRunner Velox Builder](https://build.roadrunner.dev/) to generate a base `velox_rr.toml` or `Dockerfile` with your other desired plugins.
+
+Thumper is not available in the builder, so you will need to manually add it to the `plugins` section of your config:
 
 ```toml
 [github.plugins.thumper]

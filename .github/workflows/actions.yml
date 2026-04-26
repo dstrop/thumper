@@ -14,11 +14,11 @@ permissions:
 
 jobs:
   php-lint:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
@@ -26,15 +26,13 @@ jobs:
           php-version: '8.2'
 
       - name: Cache Composer dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.composer/cache
-          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-composer-
+          key: ${{ runner.os }}-composer
 
       - name: Install Composer dependencies
-        run: composer install --no-scripts --no-progress --no-suggest --no-interaction
+        run: composer install --no-scripts --no-progress --no-interaction
 
       - name: Run phpcs
         run: composer phpcs
@@ -45,11 +43,11 @@ jobs:
   go-lint:
     runs-on: ubuntu-latest
     container:
-      image: golangci/golangci-lint:v1.64.5-alpine
+      image: golangci/golangci-lint:v2.11.4-alpine
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Run Go linters
         run: golangci-lint run ./...
@@ -64,29 +62,24 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Compile binary
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ github.ref_name }}
         run: |
-          docker run --rm \
+          touch .env
+          docker compose run --rm --no-deps \
               -e RT_TOKEN="$GITHUB_TOKEN" \
               -e TIME="$(date +%FT%T%z)" \
-              -e CGO_ENABLED=0 \
-              -e GOOS=linux \
               -e GOARCH=${{ matrix.platform }} \
-              -v $(pwd):/plugin \
-              -w /plugin \
-            ghcr.io/roadrunner-server/velox:2024.3.6 \
-              build -c velox_rr.toml -o /plugin
+            velox
 
       - name: Rename release asset
         run: mv ./rr ./rr-${{ matrix.platform }}
 
       - name: Upload release asset
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rr-binary-${{ matrix.platform }}
           path: ./rr-${{ matrix.platform }}
@@ -97,16 +90,16 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Download Binary (amd64)
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: rr-binary-amd64
           path: ./
 
       - name: Download Binary (arm64)
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: rr-binary-arm64
           path: ./
@@ -127,7 +120,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile
@@ -141,13 +134,13 @@ jobs:
 
     steps:
       - name: Download Binary (amd64)
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: rr-binary-amd64
           path: ./artifact
 
       - name: Download Binary (arm64)
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: rr-binary-arm64
           path: ./artifact

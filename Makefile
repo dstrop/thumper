@@ -35,10 +35,13 @@ lint: lint-go lint-php ## run linters
 lint-go: ## run golangci-lint
 	docker compose run --rm --no-deps -w /plugin --entrypoint golangci-lint consumer run ./...
 
-lint-php: phpcs phpstan ## run phpcs and phpstan
+lint-php: phpcs phpstan ## run php-cs-fixer and phpstan
 
-phpcs: ## run phpcs
+phpcs: ## run php-cs-fixer check
 	docker compose run --no-deps -w /plugin --rm consumer composer phpcs
+
+phpcs-fix: ## run php-cs-fixer fix
+	docker compose run --no-deps -w /plugin --rm  -u "$(shell id -u):$(shell id -g)" consumer composer phpcs-fix
 
 phpstan: ## run phpstan
 	docker compose run --no-deps -w /plugin --rm consumer composer phpstan
