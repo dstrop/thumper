@@ -1,6 +1,11 @@
 package thumper
 
-import "fmt"
+import (
+	"context"
+
+	"github.com/dstrop/thumper/amqp"
+	amqp091 "github.com/rabbitmq/amqp091-go"
+)
 
 // TODO: improve error handling, ideally the client will be able to distinguish between rr and amqp errors
 
@@ -19,19 +24,18 @@ type Message struct {
 }
 
 func (r *rpc) Publish(message *Message, _ *bool) error {
-	client, err := r.plugin.getClient()
-	if err != nil {
-		return fmt.Errorf("failed to get client: %w", err)
-	}
-
-	return client.Publish(
-		message.Exchange,
-		message.Key,
-		false,
-		false,
-		message.ContentType,
-		[]byte(message.Message),
-		message.Headers,
+	return r.plugin.getPublisher().Publish(
+		context.Background(),
+		amqp091.Publishing{
+			Headers:      amqp091.Table(message.Headers),
+			ContentType:  message.ContentType,
+			Body:         []byte(message.Message),
+			DeliveryMode: amqp091.Persistent,
+		},
+		amqp.PublishOptions{
+			Exchange:   message.Exchange,
+			RoutingKey: message.Key,
+		},
 	)
 }
 
@@ -46,20 +50,15 @@ type Exchange struct {
 }
 
 func (r *rpc) DeclareExchange(exchange *Exchange, _ *bool) error {
-	client, err := r.plugin.getClient()
-	if err != nil {
-		return fmt.Errorf("failed to get client: %w", err)
-	}
-
-	return client.DeclareExchange(
-		exchange.Name,
-		exchange.Kind,
-		exchange.Durable,
-		exchange.AutoDelete,
-		exchange.Internal,
-		exchange.NoWait,
-		exchange.Args,
-	)
+	return r.plugin.getPublisher().DeclareExchange(context.Background(), amqp.ExchangeOptions{
+		Name:       exchange.Name,
+		Kind:       exchange.Kind,
+		Durable:    exchange.Durable,
+		AutoDelete: exchange.AutoDelete,
+		Internal:   exchange.Internal,
+		NoWait:     exchange.NoWait,
+		Args:       amqp091.Table(exchange.Args),
+	})
 }
 
 type Queue struct {
@@ -72,19 +71,15 @@ type Queue struct {
 }
 
 func (r *rpc) DeclareQueue(queue *Queue, _ *bool) error {
-	client, err := r.plugin.getClient()
-	if err != nil {
-		return fmt.Errorf("failed to get client: %w", err)
-	}
-
-	return client.DeclareQueue(
-		queue.Name,
-		queue.Durable,
-		queue.AutoDelete,
-		queue.Exclusive,
-		queue.NoWait,
-		queue.Args,
-	)
+	_, err := r.plugin.getPublisher().DeclareQueue(context.Background(), amqp.QueueOptions{
+		Name:       queue.Name,
+		Durable:    queue.Durable,
+		AutoDelete: queue.AutoDelete,
+		Exclusive:  queue.Exclusive,
+		NoWait:     queue.NoWait,
+		Args:       amqp091.Table(queue.Args),
+	})
+	return err
 }
 
 type BindQueue struct {
@@ -96,16 +91,11 @@ type BindQueue struct {
 }
 
 func (r *rpc) BindQueue(bind *BindQueue, _ *bool) error {
-	client, err := r.plugin.getClient()
-	if err != nil {
-		return fmt.Errorf("failed to get client: %w", err)
-	}
-
-	return client.BindQueue(
-		bind.Queue,
-		bind.Exchange,
-		bind.Key,
-		bind.NoWait,
-		bind.Args,
-	)
+	return r.plugin.getPublisher().DeclareBinding(context.Background(), amqp.BindingOptions{
+		Queue:      bind.Queue,
+		Exchange:   bind.Exchange,
+		RoutingKey: bind.Key,
+		NoWait:     bind.NoWait,
+		Args:       amqp091.Table(bind.Args),
+	})
 }

@@ -1,144 +1,98 @@
 package amqp
 
 import (
-	"fmt"
-	"sync"
-	"sync/atomic"
-	"time"
+	"context"
 
 	amqp "github.com/rabbitmq/amqp091-go"
-	"go.uber.org/zap"
 )
 
-type consumer struct {
-	client *Client
-	logger *zap.Logger
-
-	queue       string
-	consumerTag string
-	autoAck     bool
-	exclusive   bool
-	noLocal     bool
-	noWait      bool
-	args        Table
-	prefetch    int
-
-	ch *amqp.Channel
-	mu sync.Mutex
-
-	// TODO: reevaluate if this is needed
-	closed int32
+// ConsumeOptions configures a single Consume call.
+type ConsumeOptions struct {
+	Queue       string
+	ConsumerTag string
+	AutoAck     bool
+	Exclusive   bool
+	NoWait      bool
+	Args        amqp.Table
+	Prefetch    int // applied via Qos on every new channel; 0 means no limit
 }
 
-func (c *Client) newConsumer(queue, consumerTag string, autoAck, exclusive, noLocal, noWait bool, args Table, prefetch int) *consumer {
-	return &consumer{
-		client: c,
-		logger: c.logger,
-
-		queue:       queue,
-		consumerTag: consumerTag,
-		autoAck:     autoAck,
-		exclusive:   exclusive,
-		noLocal:     noLocal,
-		noWait:      noWait,
-		args:        args,
-		prefetch:    prefetch,
-	}
+// Consumer owns a dedicated consume-side connection.
+type Consumer struct {
+	conn *connection
 }
 
-func (c *consumer) isClosed() bool {
-	return atomic.LoadInt32(&c.closed) == 1 || c.client.isClosed()
-}
+// Consume returns a delivery channel that remains open for the lifetime of ctx.
+// Internally it re-creates the AMQP channel and re-registers the consumer
+// after any disruption; the outer channel the caller holds is never closed
+// until ctx is cancelled or the Consumer is closed.
+func (c *Consumer) Consume(ctx context.Context, opts ConsumeOptions) (<-chan amqp.Delivery, error) {
+	out := make(chan amqp.Delivery)
 
-func (c *consumer) Close() error {
-	atomic.StoreInt32(&c.closed, 1)
+	go func() {
+		defer close(out)
 
-	c.mu.Lock()
-	defer c.mu.Unlock()
+		for {
+			amqpChan, err := c.conn.newChannel(ctx)
+			if err != nil {
+				return
+			}
 
-	if c.ch != nil {
-		err := c.ch.Close()
-		if err != nil {
-			return fmt.Errorf("failed to close channel: %w", err)
+			if opts.Prefetch > 0 {
+				if err := amqpChan.Qos(opts.Prefetch, 0, false); err != nil {
+					amqpChan.Close()
+					if ctx.Err() != nil {
+						return
+					}
+					continue
+				}
+			}
+
+			deliveries, err := amqpChan.Consume(
+				opts.Queue,
+				opts.ConsumerTag,
+				opts.AutoAck,
+				opts.Exclusive,
+				false, // noLocal — not supported by RabbitMQ
+				opts.NoWait,
+				opts.Args,
+			)
+			if err != nil {
+				amqpChan.Close()
+				if ctx.Err() != nil {
+					return
+				}
+				continue
+			}
+
+		loop:
+			for {
+				select {
+				case msg, ok := <-deliveries:
+					if !ok {
+						break loop // inner channel died — reconnect
+					}
+					select {
+					case out <- msg:
+					case <-ctx.Done():
+						break loop
+					}
+				case <-ctx.Done():
+					break loop
+				}
+			}
+
+			amqpChan.Close() // best-effort; error ignored
+
+			if ctx.Err() != nil {
+				return
+			}
 		}
-	}
-
-	return nil
-}
-
-func (c *consumer) Consume() (<-chan Delivery, error) {
-	out := make(chan Delivery)
-
-	in, err := c.dial()
-	if err != nil {
-		return nil, err
-	}
-
-	go c.consume(in, out)
-	go c.redial(out)
+	}()
 
 	return out, nil
 }
 
-func (c *consumer) dial() (<-chan amqp.Delivery, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	var err error
-	c.ch, err = c.client.conn.Channel()
-	if err == nil && c.prefetch != 0 {
-		err = c.ch.Qos(c.prefetch, 0, false)
-	}
-	if err != nil {
-		return nil, fmt.Errorf("failed to open channel: %w", err)
-	}
-
-	d, err := c.ch.Consume(c.queue, c.consumerTag, c.autoAck, c.exclusive, c.noLocal, c.noWait, amqp.Table(c.args))
-	if err != nil {
-		return nil, fmt.Errorf("failed to consume: %w", err)
-	}
-
-	return d, nil
-}
-
-func (c *consumer) consume(in <-chan amqp.Delivery, out chan<- Delivery) {
-	for msg := range in {
-		out <- Delivery{msg}
-	}
-	c.logger.Debug("rabbitmq consume channel closed")
-}
-
-// TODO: add logging
-func (c *consumer) redial(out chan Delivery) {
-	defer close(out)
-
-	var err error
-	var in <-chan amqp.Delivery
-
-	for {
-		closeCh := make(chan *amqp.Error, 1)
-		c.ch.NotifyClose(closeCh)
-
-		// nolint:staticcheck // SA4023 err is null when channel is gracefully closed
-		err = <-closeCh
-		// nolint:staticcheck
-		if err == nil {
-			return
-		}
-
-		in, err = c.dial()
-		if err != nil {
-			return
-		}
-
-		go c.consume(in, out)
-
-		if c.isClosed() {
-			break
-		}
-
-		go func() { _ = c.ch.Close() }()
-		// TODO: configurable reconnect interval, and consider progressive backoff
-		time.Sleep(3 * time.Second)
-	}
+func (c *Consumer) Close() error {
+	return c.conn.close()
 }

@@ -3,12 +3,15 @@ package thumper
 import (
 	"context"
 	"fmt"
+	"sync"
+	"time"
+
 	"github.com/dstrop/thumper/amqp"
+	amqp091 "github.com/rabbitmq/amqp091-go"
 	"github.com/dstrop/thumper/common"
 	"github.com/roadrunner-server/errors"
 	"github.com/roadrunner-server/pool/state/process"
 	"go.uber.org/zap"
-	"sync"
 )
 
 const pluginName string = "thumper"
@@ -22,9 +25,12 @@ type Plugin struct {
 
 	pool common.Pool
 
-	// TODO: add support for multiple clients
-	client *amqp.Client
-	wp     *Worker
+	amqpClient *amqp.Client
+	consumer   *amqp.Consumer
+	publisher  *amqp.Publisher
+	cancelCtx  context.CancelFunc
+
+	wp *Worker
 
 	// TODO: add metrics exporter
 	//statsExporter *metrics.StatsExporter
@@ -55,33 +61,28 @@ func (p *Plugin) Init(cfg common.Configurer, log common.Logger, srv common.Serve
 	}
 
 	p.log = log.NamedLogger(pluginName)
-
 	p.server = srv
+
+	p.amqpClient = amqp.NewClient(amqp.Config{
+		URL:            p.cfg.Amqp.Addr,
+		ReconnectDelay: 3 * time.Second,
+	})
 
 	return nil
 }
 
-func (p *Plugin) getClient() (*amqp.Client, error) {
+func (p *Plugin) getPublisher() *amqp.Publisher {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	if p.client != nil {
-		return p.client, nil
+	if p.publisher == nil {
+		p.publisher = p.amqpClient.NewPublisher(amqp.PublisherOptions{
+			ConfirmMode: true,
+			PoolSize:    4,
+		})
 	}
 
-	var err error
-	p.client, err = amqp.Dial(p.cfg.Amqp.Addr, p.log)
-	if err != nil {
-		return nil, fmt.Errorf("failed to dial amqp: %w", err)
-	}
-
-	// TODO: consider implementing lazy declaration
-	err = p.declare()
-	if err != nil {
-		return nil, fmt.Errorf("failed to declare amqp entities: %w", err)
-	}
-
-	return p.client, nil
+	return p.publisher
 }
 
 // Serve serves the svc.
@@ -92,9 +93,15 @@ func (p *Plugin) Serve() chan error {
 		return errCh
 	}
 
-	client, err := p.getClient()
+	// getPublisher acquires p.mu internally — call before we lock below.
+	publisher := p.getPublisher()
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	err := p.declare(ctx, publisher)
 	if err != nil {
-		p.log.Error("failed to get client", zap.Error(err))
+		cancel()
+		p.log.Error("failed to declare amqp entities", zap.Error(err))
 		errCh <- err
 		return errCh
 	}
@@ -102,48 +109,48 @@ func (p *Plugin) Serve() chan error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
+	newConsumer := p.amqpClient.NewConsumer()
+
 	p.pool, err = p.server.NewPool(context.Background(), p.cfg.Pool, nil, p.log)
 	if err != nil {
 		p.log.Error("failed to create pool", zap.Error(err))
+		cancel()
+		_ = newConsumer.Close()
 		errCh <- err
 		return errCh
 	}
 
+	p.consumer = newConsumer
+	p.cancelCtx = cancel
 	p.wp = NewWorkerPool(p.pool, int(p.cfg.Pool.NumWorkers), p.log)
 
 	for _, consumer := range p.cfg.Consumers {
-		deliveries, err := client.Consume(
-			consumer.Queue,
-			consumer.ConsumerID,
-			false,
-			false,
-			false,
-			false,
-			nil,
-			consumer.Prefetch,
-		)
-		if err != nil {
-			errCh <- err
-			return errCh
-		}
-
+		deliveries, _ := p.consumer.Consume(ctx, amqp.ConsumeOptions{
+			Queue:       consumer.Queue,
+			ConsumerTag: consumer.ConsumerID,
+			AutoAck:     false,
+			Exclusive:   false,
+			NoWait:      false,
+			Args:        nil,
+			Prefetch:    consumer.Prefetch,
+		})
 		p.wp.Consume(deliveries, consumer)
 	}
 
 	return errCh
 }
 
-func (p *Plugin) declare() error {
+func (p *Plugin) declare(ctx context.Context, publisher *amqp.Publisher) error {
 	for _, queueConfig := range p.cfg.Amqp.Queue {
 		p.log.Debug("declaring queue", zap.Any("queue", queueConfig))
-		err := p.client.DeclareQueue(
-			queueConfig.Name,
-			queueConfig.Durable,
-			queueConfig.AutoDelete,
-			queueConfig.Exclusive,
-			queueConfig.NoWait,
-			queueConfig.Args,
-		)
+		_, err := publisher.DeclareQueue(ctx, amqp.QueueOptions{
+			Name:       queueConfig.Name,
+			Durable:    queueConfig.Durable,
+			AutoDelete: queueConfig.AutoDelete,
+			Exclusive:  queueConfig.Exclusive,
+			NoWait:     queueConfig.NoWait,
+			Args:       amqp091.Table(queueConfig.Args),
+		})
 		if err != nil {
 			return fmt.Errorf("failed to declare queue %s: %w", queueConfig.Name, err)
 		}
@@ -151,15 +158,15 @@ func (p *Plugin) declare() error {
 
 	for _, exchangeConfig := range p.cfg.Amqp.Exchange {
 		p.log.Debug("declaring exchange", zap.Any("exchange", exchangeConfig))
-		err := p.client.DeclareExchange(
-			exchangeConfig.Name,
-			exchangeConfig.Kind,
-			exchangeConfig.Durable,
-			exchangeConfig.AutoDelete,
-			exchangeConfig.Internal,
-			exchangeConfig.NoWait,
-			exchangeConfig.Args,
-		)
+		err := publisher.DeclareExchange(ctx, amqp.ExchangeOptions{
+			Name:       exchangeConfig.Name,
+			Kind:       exchangeConfig.Kind,
+			Durable:    exchangeConfig.Durable,
+			AutoDelete: exchangeConfig.AutoDelete,
+			Internal:   exchangeConfig.Internal,
+			NoWait:     exchangeConfig.NoWait,
+			Args:       amqp091.Table(exchangeConfig.Args),
+		})
 		if err != nil {
 			return fmt.Errorf("failed to declare exchange %s: %w", exchangeConfig.Name, err)
 		}
@@ -167,13 +174,13 @@ func (p *Plugin) declare() error {
 
 	for _, bindQueueConfig := range p.cfg.Amqp.QueueBind {
 		p.log.Debug("binding queue", zap.Any("queue", bindQueueConfig.Queue), zap.Any("exchange", bindQueueConfig.Exchange))
-		err := p.client.BindQueue(
-			bindQueueConfig.Queue,
-			bindQueueConfig.Exchange,
-			bindQueueConfig.Key,
-			bindQueueConfig.NoWait,
-			bindQueueConfig.Args,
-		)
+		err := publisher.DeclareBinding(ctx, amqp.BindingOptions{
+			Queue:      bindQueueConfig.Queue,
+			Exchange:   bindQueueConfig.Exchange,
+			RoutingKey: bindQueueConfig.Key,
+			NoWait:     bindQueueConfig.NoWait,
+			Args:       amqp091.Table(bindQueueConfig.Args),
+		})
 		if err != nil {
 			return fmt.Errorf("failed to bind queue %s to exchange %s: %w", bindQueueConfig.Queue, bindQueueConfig.Exchange, err)
 		}
@@ -188,16 +195,28 @@ func (p *Plugin) Stop(ctx context.Context) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
+	if p.cancelCtx != nil {
+		p.cancelCtx()
+	}
+
 	doneCh := make(chan error, 1)
 
 	go func() {
-		err := p.client.Close()
-		if err != nil {
-			doneCh <- err
-			return
+		if p.wp != nil {
+			p.wp.WaitClose()
 		}
-		p.wp.WaitClose()
-		doneCh <- nil
+		var firstErr error
+		if p.consumer != nil {
+			if err := p.consumer.Close(); err != nil && firstErr == nil {
+				firstErr = err
+			}
+		}
+		if p.publisher != nil {
+			if err := p.publisher.Close(); err != nil && firstErr == nil {
+				firstErr = err
+			}
+		}
+		doneCh <- firstErr
 	}()
 
 	var err error
@@ -207,7 +226,9 @@ func (p *Plugin) Stop(ctx context.Context) error {
 	case err = <-doneCh:
 	}
 
-	p.client = nil
+	p.cancelCtx = nil
+	p.consumer = nil
+	p.publisher = nil
 
 	return err
 }

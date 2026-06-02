@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/dstrop/thumper/amqp"
+	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/dstrop/thumper/common"
 	"github.com/roadrunner-server/errors"
 	"github.com/roadrunner-server/goridge/v3/pkg/frame"
