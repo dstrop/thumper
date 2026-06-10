@@ -18,73 +18,53 @@ thumper:
 
   x-default-consumer: &default-consumer
     concurrency: 1
-
     prefetch: 10
-    priority: 3
     durable: true
     requeue_on_fail: true
 
   consumers:
-    - <<: *default-consumer
-      amqp: default # default value `default`
-      queue: queue1
-    - <<: *default-consumer
-      queue: queue2
-    - <<: *default-consumer
-      amqp: left
-      queue: queue1
+    queue1:
+      <<: *default-consumer
+    queue2:
+      <<: *default-consumer
 
   amqp:
     addr: amqp://user:password@rabbitmq:5672
 
-    queue:
-      - name: queue1
-        durable: true
-        autoDelete: false
-        exclusive: false
-        noWait: false
-        args:
-          x-key1: value1
-          x-key2: value2
-      - name: queue2
-        durable: true
-        autoDelete: false
-        exclusive: false
-        noWait: false
-        args:
-          x-key1: value1
-          x-key2: value2
     exchange:
-      - name: exchange1
+      exchange1:
         kind: direct
         durable: true
-        autoDelete: false
-        internal: false
-        noWait: false
         args:
           x-key1: value1
           x-key2: value2
-      - name: exchange2
+      exchange2:
         kind: direct
         durable: true
-        autoDelete: false
-        internal: false
-        noWait: false
         args:
           x-key1: value1
           x-key2: value2
-    queueBind:
-      - queue: queue1
-        exchange: exchange1
-        key: key1
-        noWait: false
+
+    queue:
+      queue1:
+        durable: true
         args:
           x-key1: value1
           x-key2: value2
-      - queue: queue2
-        exchange: exchange2
-        key: key2
-        noWait: false
+        bindings:
+          exchange1:
+            key: key1
+            args:
+              x-key1: value1
+              x-key2: value2
+      queue2:
+        durable: true
         args:
           x-key1: value1
           x-key2: value2
+        bindings:
+          exchange2:
+            key: key2
+            args:
+              x-key1: value1
+              x-key2: value2

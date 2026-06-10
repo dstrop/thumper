@@ -141,21 +141,6 @@ func (p *Plugin) Serve() chan error {
 }
 
 func (p *Plugin) declare(ctx context.Context, publisher *amqp.Publisher) error {
-	for _, queueConfig := range p.cfg.Amqp.Queue {
-		p.log.Debug("declaring queue", zap.Any("queue", queueConfig))
-		_, err := publisher.DeclareQueue(ctx, amqp.QueueOptions{
-			Name:       queueConfig.Name,
-			Durable:    queueConfig.Durable,
-			AutoDelete: queueConfig.AutoDelete,
-			Exclusive:  queueConfig.Exclusive,
-			NoWait:     queueConfig.NoWait,
-			Args:       amqp091.Table(queueConfig.Args),
-		})
-		if err != nil {
-			return fmt.Errorf("failed to declare queue %s: %w", queueConfig.Name, err)
-		}
-	}
-
 	for _, exchangeConfig := range p.cfg.Amqp.Exchange {
 		p.log.Debug("declaring exchange", zap.Any("exchange", exchangeConfig))
 		err := publisher.DeclareExchange(ctx, amqp.ExchangeOptions{
@@ -172,17 +157,32 @@ func (p *Plugin) declare(ctx context.Context, publisher *amqp.Publisher) error {
 		}
 	}
 
-	for _, bindQueueConfig := range p.cfg.Amqp.QueueBind {
-		p.log.Debug("binding queue", zap.Any("queue", bindQueueConfig.Queue), zap.Any("exchange", bindQueueConfig.Exchange))
-		err := publisher.DeclareBinding(ctx, amqp.BindingOptions{
-			Queue:      bindQueueConfig.Queue,
-			Exchange:   bindQueueConfig.Exchange,
-			RoutingKey: bindQueueConfig.Key,
-			NoWait:     bindQueueConfig.NoWait,
-			Args:       amqp091.Table(bindQueueConfig.Args),
+	for _, queueConfig := range p.cfg.Amqp.Queue {
+		p.log.Debug("declaring queue", zap.Any("queue", queueConfig))
+		_, err := publisher.DeclareQueue(ctx, amqp.QueueOptions{
+			Name:       queueConfig.Name,
+			Durable:    queueConfig.Durable,
+			AutoDelete: queueConfig.AutoDelete,
+			Exclusive:  queueConfig.Exclusive,
+			NoWait:     queueConfig.NoWait,
+			Args:       amqp091.Table(queueConfig.Args),
 		})
 		if err != nil {
-			return fmt.Errorf("failed to bind queue %s to exchange %s: %w", bindQueueConfig.Queue, bindQueueConfig.Exchange, err)
+			return fmt.Errorf("failed to declare queue %s: %w", queueConfig.Name, err)
+		}
+
+		for _, binding := range queueConfig.Bindings {
+			p.log.Debug("binding queue", zap.String("queue", queueConfig.Name), zap.String("exchange", binding.Exchange))
+			err = publisher.DeclareBinding(ctx, amqp.BindingOptions{
+				Queue:      queueConfig.Name,
+				Exchange:   binding.Exchange,
+				RoutingKey: binding.Key,
+				NoWait:     binding.NoWait,
+				Args:       amqp091.Table(binding.Args),
+			})
+			if err != nil {
+				return fmt.Errorf("failed to bind queue %s to exchange %s: %w", queueConfig.Name, binding.Exchange, err)
+			}
 		}
 	}
 
