@@ -104,6 +104,7 @@ Map key is used as `queue` if `queue` is not set explicitly.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `queue` | string | *(map key)* | Queue to consume from. Supports env expansion. |
+| `enabled` | bool | `true` | Set to `false` to declare the consumer without starting it. |
 | `concurrency` | int | | Number of concurrent message handlers. |
 | `prefetch` | int | `1` | Number of messages to prefetch per consumer. |
 | `durable` | bool | `false` | Consumer survives connection restart. |

@@ -7,8 +7,11 @@ import (
 	"time"
 
 	"github.com/dstrop/thumper/amqp"
-	amqp091 "github.com/rabbitmq/amqp091-go"
 	"github.com/dstrop/thumper/common"
+	"github.com/dstrop/thumper/consumer"
+	"github.com/dstrop/thumper/worker"
+	"github.com/prometheus/client_golang/prometheus"
+	amqp091 "github.com/rabbitmq/amqp091-go"
 	"github.com/roadrunner-server/errors"
 	"github.com/roadrunner-server/pool/state/process"
 	"go.uber.org/zap"
@@ -16,25 +19,35 @@ import (
 
 const pluginName string = "thumper"
 
+const (
+	amqpReconnectDelay = 3 * time.Second
+	publisherPoolSize  = 4
+)
+
 type Plugin struct {
 	cfg    *Config
 	log    *zap.Logger
 	server common.Server
 
-	mu sync.RWMutex
+	mu      sync.RWMutex
+	running bool
 
-	pool common.Pool
+	pool    common.Pool
+	metrics *collector
 
-	amqpClient *amqp.Client
-	consumer   *amqp.Consumer
-	publisher  *amqp.Publisher
-	cancelCtx  context.CancelFunc
+	amqpClient   *amqp.Client
+	connMetrics  *amqp.ConnectionMetrics
+	publisher    *amqp.Publisher
+	amqpConsumer *amqp.Consumer
 
-	wp *Worker
+	runners map[string]*consumer.Runner
+	// cancels holds the cancel func for each currently-running consumer.
+	// Cancelling stops both the amqp.Consume goroutine and unblocks the
+	// runner's semaphore simultaneously.
+	cancels map[string]context.CancelFunc
+	jobs    chan common.Job
 
-	// TODO: add metrics exporter
-	//statsExporter *metrics.StatsExporter
-	// TODO: implement status.Readiness and status.Checker
+	wp *worker.Worker
 }
 
 func (p *Plugin) Name() string {
@@ -63,12 +76,24 @@ func (p *Plugin) Init(cfg common.Configurer, log common.Logger, srv common.Serve
 	p.log = log.NamedLogger(pluginName)
 	p.server = srv
 
-	p.amqpClient = amqp.NewClient(amqp.Config{
-		URL:            p.cfg.Amqp.Addr,
-		ReconnectDelay: 3 * time.Second,
-	})
+	connMetrics := amqp.NewConnectionMetrics(namespace)
+
+	p.amqpClient = amqp.NewClient(p.cfg.Amqp.Addr, amqpReconnectDelay, connMetrics, p.log)
+
+	p.metrics = newCollector(p)
+	p.connMetrics = connMetrics
+
+	p.runners = make(map[string]*consumer.Runner, len(p.cfg.Consumers))
+	for name, consumerCfg := range p.cfg.Consumers {
+		p.runners[name] = consumer.NewRunner(name, consumerCfg.Queue, consumerCfg.Concurrency, p.log)
+		p.metrics.consumerConcurrency.WithLabelValues(name, consumerCfg.Queue).Set(float64(consumerCfg.Concurrency))
+	}
 
 	return nil
+}
+
+func (p *Plugin) MetricsCollector() []prometheus.Collector {
+	return []prometheus.Collector{p.metrics, p.connMetrics}
 }
 
 func (p *Plugin) getPublisher() *amqp.Publisher {
@@ -78,66 +103,154 @@ func (p *Plugin) getPublisher() *amqp.Publisher {
 	if p.publisher == nil {
 		p.publisher = p.amqpClient.NewPublisher(amqp.PublisherOptions{
 			ConfirmMode: true,
-			PoolSize:    4,
+			PoolSize:    publisherPoolSize,
 		})
 	}
 
 	return p.publisher
 }
 
-// Serve serves the svc.
 func (p *Plugin) Serve() chan error {
 	errCh := make(chan error, 2)
 
-	if p.cfg.Pool == nil || p.cfg.Pool.NumWorkers == 0 || len(p.cfg.Consumers) == 0 {
-		return errCh
-	}
-
-	// getPublisher acquires p.mu internally — call before we lock below.
 	publisher := p.getPublisher()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx := context.Background()
 
-	err := p.declare(ctx, publisher)
+	declareCtx, declareCancel := context.WithTimeout(ctx, p.cfg.Amqp.DeclareTimeout)
+	err := p.declare(declareCtx, publisher)
+	declareCancel()
 	if err != nil {
-		cancel()
 		p.log.Error("failed to declare amqp entities", zap.Error(err))
 		errCh <- err
 		return errCh
 	}
 
+	if len(p.cfg.Consumers) == 0 {
+		p.log.Info("no consumers configured, skipping consumer startup")
+		return errCh
+	}
+
 	p.mu.Lock()
-	defer p.mu.Unlock()
 
-	newConsumer := p.amqpClient.NewConsumer()
+	p.amqpConsumer = p.amqpClient.NewConsumer()
 
-	p.pool, err = p.server.NewPool(context.Background(), p.cfg.Pool, nil, p.log)
+	p.pool, err = p.server.NewPool(ctx, p.cfg.Pool, nil, p.log)
 	if err != nil {
 		p.log.Error("failed to create pool", zap.Error(err))
-		cancel()
-		_ = newConsumer.Close()
+		_ = p.amqpConsumer.Close()
+		p.pool = nil
+		p.mu.Unlock()
 		errCh <- err
 		return errCh
 	}
 
-	p.consumer = newConsumer
-	p.cancelCtx = cancel
-	p.wp = NewWorkerPool(p.pool, int(p.cfg.Pool.NumWorkers), p.log)
+	p.jobs = make(chan common.Job)
+	p.cancels = make(map[string]context.CancelFunc, len(p.cfg.Consumers))
 
-	for _, consumer := range p.cfg.Consumers {
-		deliveries, _ := p.consumer.Consume(ctx, amqp.ConsumeOptions{
-			Queue:       consumer.Queue,
-			ConsumerTag: consumer.ConsumerID,
-			AutoAck:     false,
-			Exclusive:   false,
-			NoWait:      false,
-			Args:        nil,
-			Prefetch:    consumer.Prefetch,
-		})
-		p.wp.Consume(deliveries, consumer)
+	p.wp = worker.New(p.pool, int(p.cfg.Pool.NumWorkers), p.jobs, p.log, p.metrics)
+	p.wp.Start()
+
+	var consumers []string
+	for name, cc := range p.cfg.Consumers {
+		if *cc.Enabled {
+			consumers = append(consumers, name)
+		}
 	}
 
+	p.running = true
+
+	p.mu.Unlock()
+
+	p.log.Info("worker pool started", zap.Uint64("workers", p.cfg.Pool.NumWorkers))
+
+	for _, name := range consumers {
+		if err := p.startRunner(name); err != nil {
+			p.log.Error("failed to start consumer", zap.String("name", name), zap.Error(err))
+			continue
+		}
+	}
+	p.log.Info("thumper started",
+		zap.Int("consumers_started", len(consumers)),
+		zap.Int("consumers_configured", len(p.cfg.Consumers)))
+
 	return errCh
+}
+
+// startRunner opens an AMQP subscription for the named consumer and starts its
+// runner. Must not be called with p.mu held.
+func (p *Plugin) startRunner(name string) error {
+	p.mu.Lock()
+	if !p.running {
+		p.mu.Unlock()
+		return fmt.Errorf("consuming is not running")
+	}
+	r, ok := p.runners[name]
+	if !ok {
+		p.mu.Unlock()
+		return fmt.Errorf("unknown consumer %q", name)
+	}
+	cc := p.cfg.Consumers[name]
+	amqpConsumer := p.amqpConsumer
+	p.mu.Unlock()
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	deliveries, err := amqpConsumer.Consume(ctx, amqp.ConsumeOptions{
+		Queue:       cc.Queue,
+		ConsumerTag: cc.ConsumerID,
+		Prefetch:    cc.Prefetch,
+	})
+	if err != nil {
+		cancel()
+		return fmt.Errorf("consume %q: %w", name, err)
+	}
+
+	if !r.Start(deliveries, p.jobs) {
+		cancel() // already running
+		p.log.Debug("consumer already running", zap.String("name", name))
+		return nil
+	}
+
+	p.mu.Lock()
+	p.cancels[name] = cancel
+	p.mu.Unlock()
+
+	p.log.Info("consumer started",
+		zap.String("name", name),
+		zap.String("queue", cc.Queue),
+		zap.Int("concurrency", cc.Concurrency),
+		zap.Int("prefetch", cc.Prefetch))
+
+	return nil
+}
+
+// stopRunner stops the named consumer's runner and closes its AMQP channel.
+// Must not be called with p.mu held.
+// Returns a channel that is closed when the runner has fully stopped.
+func (p *Plugin) stopRunner(name string) <-chan struct{} {
+	p.mu.Lock()
+	consumeCancel := p.cancels[name]
+	delete(p.cancels, name)
+	r := p.runners[name]
+	p.mu.Unlock()
+
+	p.log.Info("stopping consumer", zap.String("name", name))
+
+	runnerDone := r.Stop() // cancel pump; AMQP channel still live
+
+	done := make(chan struct{})
+	go func() {
+		if runnerDone != nil {
+			<-runnerDone // wait until all in-flight acks complete
+		}
+		if consumeCancel != nil {
+			consumeCancel() // now safe to close the AMQP channel
+		}
+		p.log.Info("consumer stopped", zap.String("name", name))
+		close(done)
+	}()
+	return done
 }
 
 func (p *Plugin) declare(ctx context.Context, publisher *amqp.Publisher) error {
@@ -189,51 +302,54 @@ func (p *Plugin) declare(ctx context.Context, publisher *amqp.Publisher) error {
 	return nil
 }
 
-// TODO: we should stop the workers first and then close the client to allow workers to finish their work
-
 func (p *Plugin) Stop(ctx context.Context) error {
+	p.log.Info("stopping thumper plugin")
+
+	p.mu.Lock()
+	p.running = false
+	running := make([]string, 0, len(p.cancels))
+	for name := range p.cancels {
+		running = append(running, name)
+	}
+	p.mu.Unlock()
+
+	dones := make([]<-chan struct{}, 0, len(running))
+	for _, name := range running {
+		dones = append(dones, p.stopRunner(name))
+	}
+	for i, d := range dones {
+		select {
+		case <-d:
+		case <-ctx.Done():
+			p.log.Warn("stop deadline reached; in-flight will be requeued",
+				zap.String("consumer", running[i]))
+		}
+	}
+
+	if p.wp != nil {
+		if err := p.wp.Stop(ctx); err != nil {
+			p.log.Warn("worker stop deadline exceeded", zap.Error(err))
+		}
+	}
+
+	if p.pool != nil {
+		p.pool.Destroy(ctx)
+	}
+
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	if p.cancelCtx != nil {
-		p.cancelCtx()
+	if p.amqpConsumer != nil {
+		if err := p.amqpConsumer.Close(); err != nil {
+			p.log.Warn("amqp consumer close error", zap.Error(err))
+		}
+		p.amqpConsumer = nil
 	}
 
-	doneCh := make(chan error, 1)
-
-	go func() {
-		if p.wp != nil {
-			p.wp.WaitClose()
-		}
-		var firstErr error
-		if p.consumer != nil {
-			if err := p.consumer.Close(); err != nil && firstErr == nil {
-				firstErr = err
-			}
-		}
-		if p.publisher != nil {
-			if err := p.publisher.Close(); err != nil && firstErr == nil {
-				firstErr = err
-			}
-		}
-		doneCh <- firstErr
-	}()
-
-	var err error
-	select {
-	case <-ctx.Done():
-		err = ctx.Err()
-	case err = <-doneCh:
-	}
-
-	p.cancelCtx = nil
-	p.consumer = nil
-	p.publisher = nil
-
-	return err
+	return nil
 }
 
-// Workers returns slice with the process states for the workers
+// Workers returns slice with the process states for the workers.
 func (p *Plugin) Workers() []*process.State {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
@@ -243,11 +359,11 @@ func (p *Plugin) Workers() []*process.State {
 	}
 
 	workers := p.pool.Workers()
-
 	ps := make([]*process.State, 0, len(workers))
-	for i := 0; i < len(workers); i++ {
+	for i := range workers {
 		state, err := process.WorkerProcessState(workers[i])
 		if err != nil {
+			p.log.Error("workers state", zap.Error(err))
 			return nil
 		}
 		ps = append(ps, state)
@@ -256,9 +372,9 @@ func (p *Plugin) Workers() []*process.State {
 	return ps
 }
 
-// Reset destroys the old pool and replaces it with new one, waiting for old pool to die
+// Reset destroys the old pool and replaces it with a new one.
 func (p *Plugin) Reset() error {
-	const op = errors.Op("http_plugin_reset")
+	const op = errors.Op("thumper_plugin_reset")
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -270,8 +386,7 @@ func (p *Plugin) Reset() error {
 		return nil
 	}
 
-	err := p.pool.Reset(context.Background())
-	if err != nil {
+	if err := p.pool.Reset(context.Background()); err != nil {
 		return errors.E(op, err)
 	}
 
@@ -281,10 +396,5 @@ func (p *Plugin) Reset() error {
 
 // RPC returns associated rpc service.
 func (p *Plugin) RPC() any {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	return &rpc{
-		plugin: p,
-	}
+	return &rpc{plugin: p}
 }

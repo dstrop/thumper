@@ -12,6 +12,7 @@ use Spiral\RoadRunner\WorkerInterface as SpiralWorkerInterface;
  *     headers: ?array<string,
  *     list<string>>,
  *     queue: string,
+ *     consumer: string,
  *     exchange: string,
  *     routingKey: string,
  *     deliveryTag: int
@@ -47,6 +48,7 @@ class Worker implements WorkerInterface
             body: $payload->body,
             headers: $context['headers'] ?? [],
             queue: $context['queue'],
+            consumer: $context['consumer'],
             exchange: $context['exchange'],
             routingKey: $context['routingKey'],
             deliveryTag: $context['deliveryTag'],

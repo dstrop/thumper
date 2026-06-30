@@ -13,6 +13,7 @@ class Message
         public readonly string $body,
         public readonly array $headers,
         public readonly string $queue,
+        public readonly string $consumer,
         public readonly string $exchange,
         public readonly string $routingKey,
         public readonly int $deliveryTag,

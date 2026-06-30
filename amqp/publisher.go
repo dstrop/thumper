@@ -3,14 +3,16 @@ package amqp
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+	"go.uber.org/zap"
 )
 
 // PublisherOptions configures a Publisher.
 type PublisherOptions struct {
-	ConfirmMode bool // enable publisher confirms on every pool channel
-	PoolSize    int  // number of channels in the pool (default: 1)
+	ConfirmMode bool
+	PoolSize    int
 }
 
 // PublishOptions controls routing for a single Publish call.
@@ -54,103 +56,114 @@ type BindingOptions struct {
 // errNacked is returned when the broker nacks a published message in confirm mode.
 var errNacked = errors.New("amqpclient: publish nacked by broker")
 
-// poolEntry holds a single channel slot inside channelPool.
-type poolEntry struct {
-	ch *amqp.Channel
+// channelPooler abstracts *channelPool so withChannel can be tested.
+type channelPooler interface {
+	acquire(ctx context.Context) (*amqp.Channel, error)
+	release(ch *amqp.Channel)
+	discard(ch *amqp.Channel)
 }
 
-// channelPool is a fixed-size pool of AMQP channels. The pool owns channel
-// creation: callers acquire and discard entries; the pool replaces nil slots
-// transparently inside acquire(), keeping the pool size bounded to PoolSize.
 type channelPool struct {
-	slots       chan *poolEntry // buffered; nil entry = slot needs a fresh channel
+	idle        chan *amqp.Channel // holds only ready-to-use channels
+	tokens      chan struct{}      // permission to create a new channel
 	conn        *connection
 	confirmMode bool
 }
 
 func newChannelPool(conn *connection, size int, confirmMode bool) *channelPool {
-	slots := make(chan *poolEntry, size)
+	tokens := make(chan struct{}, size)
 	for range size {
-		slots <- nil // all slots start empty
+		tokens <- struct{}{}
 	}
-	return &channelPool{slots: slots, conn: conn, confirmMode: confirmMode}
+	return &channelPool{
+		idle:        make(chan *amqp.Channel, size),
+		tokens:      tokens,
+		conn:        conn,
+		confirmMode: confirmMode,
+	}
 }
 
-// acquire blocks until a slot is available. If the slot is nil it calls
-// newChannel to fill it before returning.
-func (p *channelPool) acquire(ctx context.Context) (*poolEntry, error) {
+// acquire prefers reusing an idle channel; only creates a new one if none is currently available.
+func (p *channelPool) acquire(ctx context.Context) (*amqp.Channel, error) {
 	select {
-	case entry := <-p.slots:
-		if entry != nil {
-			return entry, nil
-		}
-		// Nil slot: create a new channel. On failure put the nil slot back so
-		// another caller (or a retry) can try again.
+	case ch := <-p.idle: // reuse an idle channel
+		return ch, nil
+	case <-p.tokens: // create a new channel
 		ch, err := p.conn.newChannel(ctx)
 		if err != nil {
-			p.slots <- nil
+			p.tokens <- struct{}{}
 			return nil, err
 		}
 		if p.confirmMode {
 			if err := ch.Confirm(false); err != nil {
-				ch.Close()
-				p.slots <- nil
+				_ = ch.Close()
+				p.tokens <- struct{}{}
 				return nil, err
 			}
 		}
-		return &poolEntry{ch: ch}, nil
-	case <-ctx.Done():
+		return ch, nil
+	case <-ctx.Done(): // context expired before a channel was available
 		return nil, ctx.Err()
 	}
 }
 
-// release returns a healthy entry to the pool.
-func (p *channelPool) release(entry *poolEntry) {
-	p.slots <- entry
+// release returns a healthy channel to the idle pool for reuse.
+func (p *channelPool) release(ch *amqp.Channel) {
+	p.idle <- ch
 }
 
-// discard closes the entry's channel and puts a nil slot back so the pool
-// creates a replacement on the next acquire.
-func (p *channelPool) discard(entry *poolEntry) {
-	entry.ch.Close()
-	p.slots <- nil
+// discard closes ch and frees up a creation permit for the next acquire.
+func (p *channelPool) discard(ch *amqp.Channel) {
+	_ = ch.Close()
+	p.tokens <- struct{}{}
 }
 
 // Publisher owns a dedicated publish-side connection and a channel pool.
 type Publisher struct {
 	conn *connection
-	pool *channelPool
+	pool channelPooler
 	opts PublisherOptions
 }
 
-// withChannel acquires a pool slot, runs fn, and releases or discards based on
-// the result. Server-side AMQP errors (e.g. PRECONDITION_FAILED) are returned
-// immediately without retrying — retrying a semantic error would loop forever.
+// withChannel runs fn on a pooled channel, retrying on a fresh one for transport
+// failures (with exponential backoff) and returning semantic amqp errors.
 func (p *Publisher) withChannel(ctx context.Context, fn func(*amqp.Channel) error) error {
-	for {
-		entry, err := p.pool.acquire(ctx)
-		if err != nil {
-			return err
-		}
-		err = fn(entry.ch)
+	var ch *amqp.Channel
+	var err error
+	for attempt := 1; ; attempt++ {
+		ch, err = p.pool.acquire(ctx)
 		if err == nil {
-			p.pool.release(entry)
-			return nil
+			err = fn(ch)
+			if err == nil {
+				p.pool.release(ch)
+				return nil
+			}
+			p.pool.discard(ch)
 		}
-		p.pool.discard(entry)
+
 		var amqpErr *amqp.Error
-		if errors.As(err, &amqpErr) && amqpErr.Server {
+		if !errors.Is(err, amqp.ErrClosed) && errors.As(err, &amqpErr) {
 			return err
 		}
+
 		if ctx.Err() != nil {
-			return ctx.Err()
+			return fmt.Errorf("%w; last error: %w", ctx.Err(), err)
 		}
+		delay := backoff(p.conn.reconnectDelay, attempt)
+		if !wait(ctx, p.conn.done, delay) {
+			// ctx expired, or the connection is closing (ErrClosed).
+			if cause := context.Cause(ctx); cause != nil {
+				return fmt.Errorf("%w; last error: %w", cause, err)
+			}
+			return fmt.Errorf("%w; last error: %w", ErrClosed, err)
+		}
+		p.conn.log.Debug("recoverable error, retrying on a fresh channel",
+			zap.Int("attempt", attempt),
+			zap.Duration("backoff", delay),
+			zap.Error(err))
 	}
 }
 
-// Publish sends msg, retrying transparently on channel or connection failures.
-// It blocks if all pool slots are busy or the connection is recovering.
-// ctx controls the maximum wait time.
 func (p *Publisher) Publish(ctx context.Context, msg amqp.Publishing, opts PublishOptions) error {
 	var dc *amqp.DeferredConfirmation
 	err := p.withChannel(ctx, func(ch *amqp.Channel) error {

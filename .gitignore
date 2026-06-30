@@ -6,3 +6,4 @@
 /.dev/worker/vendor
 /.env
 /rr
+/coverage.*

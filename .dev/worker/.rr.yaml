@@ -2,6 +2,9 @@ version: '3'
 rpc:
     listen: 'tcp://127.0.0.1:6001'
 
+metrics:
+    address: 0.0.0.0:2112
+
 server:
     command: 'php consumer.php'
     relay: pipes
@@ -20,7 +23,6 @@ thumper:
     concurrency: 1
     prefetch: 10
     durable: true
-    requeue_on_fail: true
 
   consumers:
     queue1:

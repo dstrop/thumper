@@ -6,34 +6,48 @@ import (
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+	"go.uber.org/zap"
 )
 
+// connection wraps an amqp.Connection and manages reconnecting.
 type connection struct {
-	config Config
-	conn   *amqp.Connection // nil while disconnected
-	mu     sync.Mutex
-	ready  chan struct{} // closed when conn transitions nil→non-nil; replaced each cycle
+	url            string
+	reconnectDelay time.Duration
+
+	role    string
+	metrics *ConnectionMetrics
+	log     *zap.Logger
+
+	mu sync.Mutex
+
+	conn *amqp.Connection
+
+	ready  chan struct{}
 	closed bool
-	done   chan struct{} // closed once when Close() is called
+	done   chan struct{}
 }
 
-func newConnection(config Config) *connection {
+const defaultReconnectDelay = time.Second
+
+func newConnection(client *Client, role string) *connection {
+	reconnectDelay := client.reconnectDelay
+	if reconnectDelay <= 0 {
+		reconnectDelay = defaultReconnectDelay
+	}
 	c := &connection{
-		config: config,
-		ready:  make(chan struct{}),
-		done:   make(chan struct{}),
+		url:            client.url,
+		reconnectDelay: reconnectDelay,
+		role:           role,
+		metrics:        client.metrics,
+		log:            client.log.With(zap.String("connection", role)),
+		ready:          make(chan struct{}),
+		done:           make(chan struct{}),
 	}
 	go c.reconnectLoop()
 	return c
 }
 
-// newChannel blocks until a live connection is available and returns a fresh
-// channel on it. Returns ErrClosed if the connection has been shut down, or
-// ctx.Err() if the context expires while waiting.
-//
-// Channel-level errors (e.g. max channels reached) are returned directly
-// without niling the connection — the TCP connection is still alive in that
-// case and niling it would permanently strand all waiters.
+// newChannel create a new amqp Channel. It blocks until a live connection is available, then returns a fresh channel on it.
 func (c *connection) newChannel(ctx context.Context) (*amqp.Channel, error) {
 	for {
 		c.mu.Lock()
@@ -43,19 +57,25 @@ func (c *connection) newChannel(ctx context.Context) (*amqp.Channel, error) {
 		}
 		if c.conn != nil {
 			ch, err := c.conn.Channel()
-			c.mu.Unlock()
-			if err != nil {
+			if err == nil {
+				c.mu.Unlock()
+				return ch, nil
+			}
+			if !c.conn.IsClosed() {
+				c.mu.Unlock()
 				return nil, err
 			}
-			return ch, nil
+
+			c.conn = nil
+			c.ready = make(chan struct{})
 		}
-		// Capture the current ready channel under the lock so we don't miss a
-		// close that happens between the Unlock and the select below.
+
+		// Capture the current ready channel under the lock to prevent a race condition.
 		ready := c.ready
 		c.mu.Unlock()
 
 		select {
-		case <-ready: // reconnectLoop dialled successfully; loop to recheck
+		case <-ready: // reconnected
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		case <-c.done:
@@ -64,11 +84,10 @@ func (c *connection) newChannel(ctx context.Context) (*amqp.Channel, error) {
 	}
 }
 
+// reconnectLoop runs in a goroutine and manages the connection lifecycle, reconnecting as needed.
 func (c *connection) reconnectLoop() {
-	delay := c.config.ReconnectDelay
-	if delay <= 0 {
-		delay = time.Second
-	}
+	disconnectedAt := time.Now() // connecting since goroutine start
+	attempt := 0                 // consecutive dial failures; resets on connect
 
 	for {
 		c.mu.Lock()
@@ -78,32 +97,51 @@ func (c *connection) reconnectLoop() {
 		}
 		c.mu.Unlock()
 
-		conn, err := amqp.DialConfig(c.config.URL, c.config.AMQPConfig)
+		conn, err := amqp.Dial(c.url)
 		if err != nil {
-			select {
-			case <-time.After(delay):
-			case <-c.done:
+			attempt++
+			delay := backoff(c.reconnectDelay, attempt)
+			c.metrics.incDialFailures(c.role)
+			c.log.Warn("amqp dial failed, retrying",
+				zap.Error(err),
+				zap.Duration("retry_in", delay))
+			if !wait(context.Background(), c.done, delay) {
 				return
 			}
 			continue
 		}
+		attempt = 0
 
 		c.mu.Lock()
 		if c.closed {
 			c.mu.Unlock()
-			conn.Close()
+			_ = conn.Close()
 			return
 		}
 		c.conn = conn
 		close(c.ready)
 		c.mu.Unlock()
 
+		connectDuration := time.Since(disconnectedAt)
+		c.metrics.observeConnectDuration(c.role, connectDuration)
+		c.log.Info("amqp connected", zap.Duration("connect_duration", connectDuration))
+		c.metrics.setConnectionUp(c.role, 1)
+
 		notifyClose := make(chan *amqp.Error, 1)
 		conn.NotifyClose(notifyClose)
 
 		select {
-		case <-notifyClose:
+		case closeErr := <-notifyClose:
+			c.metrics.setConnectionUp(c.role, 0)
+			c.metrics.incConnectionLost(c.role)
+			disconnectedAt = time.Now()
+			if closeErr != nil {
+				c.log.Warn("amqp connection lost", zap.Error(closeErr))
+			} else {
+				c.log.Info("amqp connection closed")
+			}
 		case <-c.done:
+			c.metrics.setConnectionUp(c.role, 0)
 			return
 		}
 
@@ -113,15 +151,10 @@ func (c *connection) reconnectLoop() {
 			c.ready = make(chan struct{}) // new "not ready" signal for the next dial
 		}
 		c.mu.Unlock()
-
-		select {
-		case <-time.After(delay):
-		case <-c.done:
-			return
-		}
 	}
 }
 
+// close closes the connection and signals the reconnectLoop to exit.
 func (c *connection) close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()

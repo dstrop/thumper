@@ -6,6 +6,9 @@ namespace Thumper;
 
 use Spiral\Goridge\RPC\RPCInterface;
 
+/**
+ * @phpstan-import-type StatusResponse from ThumperInterface
+ */
 class Thumper implements ThumperInterface
 {
     private const SERVICE_NAME = 'thumper';
@@ -24,21 +27,50 @@ class Thumper implements ThumperInterface
         string $exchange,
         string $key,
         string $contentType,
-        string $message,
+        string $body,
         array $headers = [],
     ): void {
-        $payload = \compact('exchange', 'key', 'contentType', 'message');
-
-        foreach (\array_keys($headers) as $headerKey) {
-            if (!\is_string($headerKey)) { // @phpstan-ignore function.alreadyNarrowedType
-                throw new \TypeError('Header keys must be strings');
-            }
-        }
+        $this->assertStringKeys($headers, 'Header');
+        $payload = \compact('exchange', 'key', 'contentType', 'body');
         if ($headers !== []) {
             $payload['headers'] = $headers;
         }
 
         $this->rpc->call('Publish', $payload);
+    }
+
+    /**
+     * @return StatusResponse
+     */
+    public function status(): array
+    {
+        /** @phpstan-ignore cast.string */
+        $json = (string) $this->rpc->call('Status', false);
+
+        /** @var StatusResponse $status */
+        $status = \json_decode($json, true, flags: \JSON_THROW_ON_ERROR);
+
+        return $status;
+    }
+
+    public function setWorkerCount(int $count): void
+    {
+        $this->rpc->call('SetWorkers', ['workers' => $count]);
+    }
+
+    public function setConsumerConcurrency(string $name, int $concurrency): void
+    {
+        $this->rpc->call('SetConcurrency', \compact('name', 'concurrency'));
+    }
+
+    public function enableConsumer(string $name): void
+    {
+        $this->rpc->call('EnableConsumer', \compact('name'));
+    }
+
+    public function disableConsumer(string $name): void
+    {
+        $this->rpc->call('DisableConsumer', \compact('name'));
     }
 
     /**
@@ -53,18 +85,14 @@ class Thumper implements ThumperInterface
         bool $noWait = false,
         array $args = [],
     ): void {
-        $payload = \compact('name', 'type', 'durable', 'autoDelete', 'internal', 'noWait');
-
-        foreach (\array_keys($args) as $argKey) {
-            if (!\is_string($argKey)) { // @phpstan-ignore function.alreadyNarrowedType
-                throw new \TypeError('Argument keys must be strings');
-            }
-        }
+        $this->assertStringKeys($args, 'Argument');
+        $payload = \compact('name', 'durable', 'autoDelete', 'internal', 'noWait');
+        $payload['kind'] = $type;
         if ($args !== []) {
             $payload['args'] = $args;
         }
 
-        $this->rpc->call('ExchangeDeclare', $payload);
+        $this->rpc->call('DeclareExchange', $payload);
     }
 
     /**
@@ -78,18 +106,13 @@ class Thumper implements ThumperInterface
         bool $noWait = false,
         array $args = [],
     ): void {
+        $this->assertStringKeys($args, 'Argument');
         $payload = \compact('name', 'durable', 'autoDelete', 'exclusive', 'noWait');
-
-        foreach (\array_keys($args) as $argKey) {
-            if (!\is_string($argKey)) { // @phpstan-ignore function.alreadyNarrowedType
-                throw new \TypeError('Argument keys must be strings');
-            }
-        }
         if ($args !== []) {
             $payload['args'] = $args;
         }
 
-        $this->rpc->call('QueueDeclare', $payload);
+        $this->rpc->call('DeclareQueue', $payload);
     }
 
     /**
@@ -102,17 +125,24 @@ class Thumper implements ThumperInterface
         bool $noWait = false,
         array $args = [],
     ): void {
+        $this->assertStringKeys($args, 'Argument');
         $payload = \compact('queue', 'exchange', 'key', 'noWait');
-
-        foreach (\array_keys($args) as $argKey) {
-            if (!\is_string($argKey)) { // @phpstan-ignore function.alreadyNarrowedType
-                throw new \TypeError('Argument keys must be strings');
-            }
-        }
         if ($args !== []) {
             $payload['args'] = $args;
         }
 
         $this->rpc->call('BindQueue', $payload);
+    }
+
+    /**
+     * @param array<mixed, mixed> $map
+     */
+    private function assertStringKeys(array $map, string $label): void
+    {
+        foreach (\array_keys($map) as $key) {
+            if (!\is_string($key)) {
+                throw new \TypeError("{$label} keys must be strings");
+            }
+        }
     }
 }

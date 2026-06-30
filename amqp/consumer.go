@@ -2,8 +2,10 @@ package amqp
 
 import (
 	"context"
+	"errors"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+	"go.uber.org/zap"
 )
 
 // ConsumeOptions configures a single Consume call.
@@ -14,83 +16,110 @@ type ConsumeOptions struct {
 	Exclusive   bool
 	NoWait      bool
 	Args        amqp.Table
-	Prefetch    int // applied via Qos on every new channel; 0 means no limit
+	Prefetch    int
 }
 
-// Consumer owns a dedicated consume-side connection.
+// Consumer wraps a connection and provides a method to consume messages from a queue.
 type Consumer struct {
 	conn *connection
 }
 
-// Consume returns a delivery channel that remains open for the lifetime of ctx.
-// Internally it re-creates the AMQP channel and re-registers the consumer
-// after any disruption; the outer channel the caller holds is never closed
-// until ctx is cancelled or the Consumer is closed.
+// Consume returns a delivery channel that stays open for the lifetime of ctx, transparently reconnecting.
 func (c *Consumer) Consume(ctx context.Context, opts ConsumeOptions) (<-chan amqp.Delivery, error) {
 	out := make(chan amqp.Delivery)
 
-	go func() {
-		defer close(out)
+	go c.consume(ctx, opts, out)
 
-		for {
-			amqpChan, err := c.conn.newChannel(ctx)
-			if err != nil {
+	return out, nil
+}
+
+// register opens a fresh channel, applies prefetch, and starts consuming.
+func (c *Consumer) register(ctx context.Context, opts ConsumeOptions) (*amqp.Channel, <-chan amqp.Delivery, error) {
+	amqpChan, err := c.conn.newChannel(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if opts.Prefetch > 0 {
+		if err := amqpChan.Qos(opts.Prefetch, 0, false); err != nil {
+			_ = amqpChan.Close()
+			return nil, nil, err
+		}
+	}
+
+	deliveries, err := amqpChan.Consume(
+		opts.Queue,
+		opts.ConsumerTag,
+		opts.AutoAck,
+		opts.Exclusive,
+		false, // noLocal - not supported by RabbitMQ
+		opts.NoWait,
+		opts.Args,
+	)
+	if err != nil {
+		_ = amqpChan.Close()
+		return nil, nil, err
+	}
+
+	return amqpChan, deliveries, nil
+}
+
+func (c *Consumer) consume(ctx context.Context, opts ConsumeOptions, out chan<- amqp.Delivery) {
+	defer close(out)
+
+	log := c.conn.log.With(
+		zap.String("queue", opts.Queue),
+		zap.String("consumer_tag", opts.ConsumerTag))
+
+	attempt := 0
+
+	for {
+		amqpChan, deliveries, err := c.register(ctx, opts)
+		if err != nil {
+			// ErrClosed / ctx cancellation are terminal.
+			if errors.Is(err, ErrClosed) || ctx.Err() != nil {
 				return
 			}
-
-			if opts.Prefetch > 0 {
-				if err := amqpChan.Qos(opts.Prefetch, 0, false); err != nil {
-					amqpChan.Close()
-					if ctx.Err() != nil {
-						return
-					}
-					continue
-				}
+			// Anything else attempts to reconnect the consumer.
+			attempt++
+			delay := backoff(c.conn.reconnectDelay, attempt)
+			log.Warn("consumer setup failed, retrying",
+				zap.Error(err),
+				zap.Duration("retry_in", delay))
+			if !wait(ctx, c.conn.done, delay) {
+				return
 			}
+			continue
+		}
 
-			deliveries, err := amqpChan.Consume(
-				opts.Queue,
-				opts.ConsumerTag,
-				opts.AutoAck,
-				opts.Exclusive,
-				false, // noLocal — not supported by RabbitMQ
-				opts.NoWait,
-				opts.Args,
-			)
-			if err != nil {
-				amqpChan.Close()
-				if ctx.Err() != nil {
-					return
+		attempt = 0 // reset backoff
+		log.Info("consumer registered")
+
+	loop:
+		for {
+			select {
+			case msg, ok := <-deliveries:
+				if !ok {
+					break loop // inner channel died - reconnect
 				}
-				continue
-			}
-
-		loop:
-			for {
 				select {
-				case msg, ok := <-deliveries:
-					if !ok {
-						break loop // inner channel died — reconnect
-					}
-					select {
-					case out <- msg:
-					case <-ctx.Done():
-						break loop
-					}
+				case out <- msg:
 				case <-ctx.Done():
 					break loop
 				}
-			}
-
-			amqpChan.Close() // best-effort; error ignored
-
-			if ctx.Err() != nil {
-				return
+			case <-ctx.Done():
+				break loop
 			}
 		}
-	}()
 
-	return out, nil
+		_ = amqpChan.Close()
+
+		if ctx.Err() != nil {
+			return
+		}
+
+		log.Warn("delivery stream interrupted, re-registering consumer")
+	}
 }
 
 func (c *Consumer) Close() error {

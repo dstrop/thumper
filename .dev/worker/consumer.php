@@ -8,6 +8,8 @@ use Spiral\RoadRunner\Worker;
 
 $worker = new \Thumper\Worker(Worker::create());
 
+fwrite(STDERR, 'Worker started' . PHP_EOL);
+
 while ($message = $worker->waitMessage()) {
     try {
         # process message

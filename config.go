@@ -2,10 +2,13 @@ package thumper
 
 import (
 	"os"
+	"time"
 
 	"github.com/roadrunner-server/config/v5"
 	"github.com/roadrunner-server/pool/pool"
 )
+
+const defaultDeclareTimeout = 30 * time.Second
 
 type Config struct {
 	Amqp *AmqpConfig `mapstructure:"amqp"`
@@ -17,6 +20,8 @@ type Config struct {
 
 type AmqpConfig struct {
 	Addr string `mapstructure:"addr"`
+
+	DeclareTimeout time.Duration `mapstructure:"declare_timeout"`
 
 	Queue    map[string]*QueueConfig    `mapstructure:"queue"`
 	Exchange map[string]*ExchangeConfig `mapstructure:"exchange"`
@@ -50,25 +55,21 @@ type ExchangeConfig struct {
 }
 
 type ConsumerConfig struct {
-	Queue string `mapstructure:"queue"`
+	Queue   string `mapstructure:"queue"`
+	Enabled *bool  `mapstructure:"enabled"`
 
-	Prefetch      int   `mapstructure:"prefetch"`
-	Durable       bool  `mapstructure:"durable"`
-	RequeueOnFail *bool `mapstructure:"requeue_on_fail"`
-
+	Prefetch   int    `mapstructure:"prefetch"`
+	Durable    bool   `mapstructure:"durable"`
 	ConsumerID string `mapstructure:"consumer_id"`
 
 	Concurrency int `mapstructure:"concurrency"`
 }
 
 func (c *Config) InitDefaults() {
-	for key, consumer := range c.Consumers {
-		if consumer.Queue == "" {
-			consumer.Queue = key
-		}
-	}
-
 	if c.Amqp != nil {
+		if c.Amqp.DeclareTimeout <= 0 {
+			c.Amqp.DeclareTimeout = defaultDeclareTimeout
+		}
 		for key, queue := range c.Amqp.Queue {
 			if queue.Name == "" {
 				queue.Name = key
@@ -86,24 +87,30 @@ func (c *Config) InitDefaults() {
 		}
 	}
 
-	if c.Pool != nil {
-		c.Pool.InitDefaults()
+	if c.Pool == nil {
+		c.Pool = &pool.Config{}
 	}
+	c.Pool.InitDefaults()
 
-	for _, consumer := range c.Consumers {
-		consumer.InitDefaults()
+	for name, cc := range c.Consumers {
+		cc.InitDefaults(name)
 	}
 }
 
-func (c *ConsumerConfig) InitDefaults() {
+func (c *ConsumerConfig) InitDefaults(name string) {
+	if c.Queue == "" {
+		c.Queue = name
+	}
+	if c.ConsumerID == "" {
+		c.ConsumerID = "thumper." + name
+	}
+	if c.Enabled == nil {
+		c.Enabled = new(true)
+	}
 	if c.Prefetch == 0 {
 		c.Prefetch = 1
 	}
 
-	if c.RequeueOnFail == nil {
-		requeueOnFail := true
-		c.RequeueOnFail = &requeueOnFail
-	}
 }
 
 func (c *Config) ExpandEnv() {
@@ -111,48 +118,52 @@ func (c *Config) ExpandEnv() {
 		consumer.ExpandEnv()
 	}
 
-	for _, queue := range c.Amqp.Queue {
-		queue.ExpandEnv()
-	}
+	if c.Amqp != nil {
+		for _, queue := range c.Amqp.Queue {
+			queue.ExpandEnv()
+		}
 
-	for _, exchange := range c.Amqp.Exchange {
-		exchange.ExpandEnv()
+		for _, exchange := range c.Amqp.Exchange {
+			exchange.ExpandEnv()
+		}
 	}
 }
 
 func (c *ConsumerConfig) ExpandEnv() {
-	c.Queue = config.ExpandVal(c.Queue, os.Getenv)
-	c.ConsumerID = config.ExpandVal(c.ConsumerID, os.Getenv)
+	c.Queue = expandEnv(c.Queue)
+	c.ConsumerID = expandEnv(c.ConsumerID)
 }
 
 func (c *QueueConfig) ExpandEnv() {
-	c.Name = config.ExpandVal(c.Name, os.Getenv)
-	for key, value := range c.Args {
-		if valueStr, ok := value.(string); ok {
-			c.Args[key] = config.ExpandVal(valueStr, os.Getenv)
-		}
-	}
+	c.Name = expandEnv(c.Name)
+	expandEnvMap(c.Args)
 	for _, binding := range c.Bindings {
 		binding.ExpandEnv()
 	}
 }
 
 func (c *BindingConfig) ExpandEnv() {
-	c.Exchange = config.ExpandVal(c.Exchange, os.Getenv)
-	c.Key = config.ExpandVal(c.Key, os.Getenv)
-	for key, value := range c.Args {
-		if valueStr, ok := value.(string); ok {
-			c.Args[key] = config.ExpandVal(valueStr, os.Getenv)
-		}
-	}
+	c.Exchange = expandEnv(c.Exchange)
+	c.Key = expandEnv(c.Key)
+	expandEnvMap(c.Args)
 }
 
 func (c *ExchangeConfig) ExpandEnv() {
-	c.Name = config.ExpandVal(c.Name, os.Getenv)
-	c.Kind = config.ExpandVal(c.Kind, os.Getenv)
-	for key, value := range c.Args {
+	c.Name = expandEnv(c.Name)
+	c.Kind = expandEnv(c.Kind)
+	expandEnvMap(c.Args)
+}
+
+func expandEnv(s string) string {
+	return config.ExpandVal(s, os.Getenv)
+}
+
+// expandEnvMap expands environment variables in every string value of args
+// in place. Non-string values are left untouched.
+func expandEnvMap(args map[string]any) {
+	for key, value := range args {
 		if valueStr, ok := value.(string); ok {
-			c.Args[key] = config.ExpandVal(valueStr, os.Getenv)
+			args[key] = expandEnv(valueStr)
 		}
 	}
 }
