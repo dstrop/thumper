@@ -30,6 +30,9 @@ up-consumer: ## start example consumer
 up-producer: ## run example producer
 	docker compose exec consumer php producer.php
 
+exec-cli: ## execute cli command
+	docker compose exec consumer php cli.php
+
 lint: lint-go lint-php ## run linters
 
 lint-go: ## run golangci-lint

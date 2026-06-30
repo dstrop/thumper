@@ -3,8 +3,10 @@ package amqp
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+	"go.uber.org/zap"
 )
 
 // PublisherOptions configures a Publisher.
@@ -124,27 +126,39 @@ type Publisher struct {
 }
 
 // withChannel acquires a pool slot, runs fn, and releases or discards based on
-// the result. Server-side AMQP errors (e.g. PRECONDITION_FAILED) are returned
-// immediately without retrying — retrying a semantic error would loop forever.
+// the result.
+//
+// Exit immediately (no retry):
+//   - fn succeeds
+//   - fn returns a server-side *amqp.Error (e.g. PRECONDITION_FAILED) — semantic,
+//     retrying would loop forever
+//   - ctx expires — returns a wrapped error combining ctx.Err() and the last fn error
+//
+// Retry (discard channel, get a fresh one):
+//   - fn returns a transient error: client-side *amqp.Error (e.g. ErrClosed from a
+//     dropped connection) or a plain I/O error — a new channel resolves both
 func (p *Publisher) withChannel(ctx context.Context, fn func(*amqp.Channel) error) error {
+	var lastErr error
 	for {
 		entry, err := p.pool.acquire(ctx)
 		if err != nil {
 			return err
 		}
-		err = fn(entry.ch)
-		if err == nil {
+		lastErr = fn(entry.ch)
+		if lastErr == nil {
 			p.pool.release(entry)
 			return nil
 		}
 		p.pool.discard(entry)
 		var amqpErr *amqp.Error
-		if errors.As(err, &amqpErr) && amqpErr.Server {
-			return err
+		if errors.As(lastErr, &amqpErr) && amqpErr.Server {
+			return lastErr
 		}
 		if ctx.Err() != nil {
-			return ctx.Err()
+			return fmt.Errorf("%w; last error: %w", ctx.Err(), lastErr)
 		}
+		p.conn.log.Debug("transient publish error, retrying on a fresh channel",
+			zap.Error(lastErr))
 	}
 }
 

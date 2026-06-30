@@ -6,3 +6,5 @@
 /.dev/worker/vendor
 /.env
 /rr
+
+/vendor.go

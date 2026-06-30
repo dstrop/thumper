@@ -7,6 +7,7 @@
     ],
     "require": {
         "dstrop/thumper": "@dev",
-        "tracy/tracy": "^2.10"
+        "tracy/tracy": "^2.10",
+        "symfony/console": "^7.0"
     }
 }

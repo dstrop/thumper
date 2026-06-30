@@ -28,6 +28,8 @@ services:
       - docker-cache:/.composer
     environment:
       COMPOSER_CACHE_DIR: /.composer/cache
+    ports:
+      - "2112:2112"
     depends_on:
       rabbitmq:
         condition: service_healthy
