@@ -3,6 +3,7 @@ package amqp
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 	"go.uber.org/zap"
@@ -24,13 +25,30 @@ type Consumer struct {
 	conn *connection
 }
 
-// Consume returns a delivery channel that stays open for the lifetime of ctx, transparently reconnecting.
-func (c *Consumer) Consume(ctx context.Context, opts ConsumeOptions) (<-chan amqp.Delivery, error) {
-	out := make(chan amqp.Delivery)
+// Subscription is a live consume session.
+type Subscription struct {
+	deliveries chan amqp.Delivery
+	subscribed atomic.Bool
+}
 
-	go c.consume(ctx, opts, out)
+// Deliveries returns the channel messages are delivered on.
+func (s *Subscription) Deliveries() <-chan amqp.Delivery {
+	return s.deliveries
+}
 
-	return out, nil
+// Subscribed reports whether the consumer is currently registered on the broker.
+func (s *Subscription) Subscribed() bool {
+	return s.subscribed.Load()
+}
+
+// Consume starts a Subscription whose delivery channel stays open for the
+// lifetime of ctx, transparently reconnecting.
+func (c *Consumer) Consume(ctx context.Context, opts ConsumeOptions) (*Subscription, error) {
+	sub := &Subscription{deliveries: make(chan amqp.Delivery)}
+
+	go c.consume(ctx, opts, sub)
+
+	return sub, nil
 }
 
 // register opens a fresh channel, applies prefetch, and starts consuming.
@@ -64,8 +82,8 @@ func (c *Consumer) register(ctx context.Context, opts ConsumeOptions) (*amqp.Cha
 	return amqpChan, deliveries, nil
 }
 
-func (c *Consumer) consume(ctx context.Context, opts ConsumeOptions, out chan<- amqp.Delivery) {
-	defer close(out)
+func (c *Consumer) consume(ctx context.Context, opts ConsumeOptions, sub *Subscription) {
+	defer close(sub.deliveries)
 
 	log := c.conn.log.With(
 		zap.String("queue", opts.Queue),
@@ -93,6 +111,7 @@ func (c *Consumer) consume(ctx context.Context, opts ConsumeOptions, out chan<- 
 		}
 
 		attempt = 0 // reset backoff
+		sub.subscribed.Store(true)
 		log.Info("consumer registered")
 
 	loop:
@@ -103,7 +122,7 @@ func (c *Consumer) consume(ctx context.Context, opts ConsumeOptions, out chan<- 
 					break loop // inner channel died - reconnect
 				}
 				select {
-				case out <- msg:
+				case sub.deliveries <- msg:
 				case <-ctx.Done():
 					break loop
 				}
@@ -112,6 +131,7 @@ func (c *Consumer) consume(ctx context.Context, opts ConsumeOptions, out chan<- 
 			}
 		}
 
+		sub.subscribed.Store(false)
 		_ = amqpChan.Close()
 
 		if ctx.Err() != nil {

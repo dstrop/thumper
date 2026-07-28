@@ -3,6 +3,7 @@ package thumper
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"sync"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/dstrop/thumper/worker"
 	"github.com/prometheus/client_golang/prometheus"
 	amqp091 "github.com/rabbitmq/amqp091-go"
+	"github.com/roadrunner-server/api/v4/plugins/v1/status"
 	"github.com/roadrunner-server/errors"
 	"github.com/roadrunner-server/pool/state/process"
 	"go.uber.org/zap"
@@ -45,7 +47,10 @@ type Plugin struct {
 	// Cancelling stops both the amqp.Consume goroutine and unblocks the
 	// runner's semaphore simultaneously.
 	cancels map[string]context.CancelFunc
-	jobs    chan common.Job
+	// subs holds the live AMQP subscription for each currently-running
+	// consumer, used to report per-consumer readiness.
+	subs map[string]*amqp.Subscription
+	jobs chan common.Job
 
 	wp *worker.Worker
 }
@@ -147,6 +152,7 @@ func (p *Plugin) Serve() chan error {
 
 	p.jobs = make(chan common.Job)
 	p.cancels = make(map[string]context.CancelFunc, len(p.cfg.Consumers))
+	p.subs = make(map[string]*amqp.Subscription, len(p.cfg.Consumers))
 
 	p.wp = worker.New(p.pool, int(p.cfg.Pool.NumWorkers), p.jobs, p.log, p.metrics)
 	p.wp.Start()
@@ -196,7 +202,7 @@ func (p *Plugin) startRunner(name string) error {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	deliveries, err := amqpConsumer.Consume(ctx, amqp.ConsumeOptions{
+	sub, err := amqpConsumer.Consume(ctx, amqp.ConsumeOptions{
 		Queue:       cc.Queue,
 		ConsumerTag: cc.ConsumerID,
 		Prefetch:    cc.Prefetch,
@@ -206,7 +212,7 @@ func (p *Plugin) startRunner(name string) error {
 		return fmt.Errorf("consume %q: %w", name, err)
 	}
 
-	if !r.Start(deliveries, p.jobs) {
+	if !r.Start(sub.Deliveries(), p.jobs) {
 		cancel() // already running
 		p.log.Debug("consumer already running", zap.String("name", name))
 		return nil
@@ -214,6 +220,7 @@ func (p *Plugin) startRunner(name string) error {
 
 	p.mu.Lock()
 	p.cancels[name] = cancel
+	p.subs[name] = sub
 	p.mu.Unlock()
 
 	p.log.Info("consumer started",
@@ -232,6 +239,7 @@ func (p *Plugin) stopRunner(name string) <-chan struct{} {
 	p.mu.Lock()
 	consumeCancel := p.cancels[name]
 	delete(p.cancels, name)
+	delete(p.subs, name)
 	r := p.runners[name]
 	p.mu.Unlock()
 
@@ -370,6 +378,54 @@ func (p *Plugin) Workers() []*process.State {
 	}
 
 	return ps
+}
+
+// hasActiveWorker reports whether the pool has at least one live worker
+// (Ready or Working). Must be called with p.mu held.
+func (p *Plugin) hasActiveWorker() bool {
+	if p.pool == nil {
+		return false
+	}
+	workers := p.pool.Workers()
+	for i := range workers {
+		if workers[i].State().IsActive() {
+			return true
+		}
+	}
+	return false
+}
+
+func (p *Plugin) Status() (*status.Status, error) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	if !p.running || !p.hasActiveWorker() {
+		return &status.Status{Code: http.StatusServiceUnavailable}, nil
+	}
+
+	return &status.Status{Code: http.StatusOK}, nil
+}
+
+func (p *Plugin) Ready() (*status.Status, error) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	if !p.running || !p.hasActiveWorker() {
+		return &status.Status{Code: http.StatusServiceUnavailable}, nil
+	}
+
+	// Every enabled consumer must be actively subscribed on the broker.
+	for name, cc := range p.cfg.Consumers {
+		if !*cc.Enabled {
+			continue
+		}
+		sub, ok := p.subs[name]
+		if !ok || !sub.Subscribed() {
+			return &status.Status{Code: http.StatusServiceUnavailable}, nil
+		}
+	}
+
+	return &status.Status{Code: http.StatusOK}, nil
 }
 
 // Reset destroys the old pool and replaces it with a new one.
