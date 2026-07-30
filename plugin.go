@@ -131,8 +131,13 @@ func (p *Plugin) Serve() chan error {
 		return errCh
 	}
 
-	if len(p.cfg.Consumers) == 0 {
-		p.log.Info("no consumers configured, skipping consumer startup")
+	if p.cfg.DisableConsumers {
+		p.mu.Lock()
+		p.running = true
+		p.mu.Unlock()
+
+		p.log.Info("consumers disabled, publishing only",
+			zap.Int("consumers_configured", len(p.cfg.Consumers)))
 		return errCh
 	}
 
@@ -399,7 +404,7 @@ func (p *Plugin) Status() (*status.Status, error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
-	if !p.running || !p.hasActiveWorker() {
+	if !p.running || (!p.cfg.DisableConsumers && !p.hasActiveWorker()) {
 		return &status.Status{Code: http.StatusServiceUnavailable}, nil
 	}
 
@@ -410,8 +415,12 @@ func (p *Plugin) Ready() (*status.Status, error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
-	if !p.running || !p.hasActiveWorker() {
+	if !p.running || (!p.cfg.DisableConsumers && !p.hasActiveWorker()) {
 		return &status.Status{Code: http.StatusServiceUnavailable}, nil
+	}
+
+	if p.cfg.DisableConsumers {
+		return &status.Status{Code: http.StatusOK}, nil
 	}
 
 	// Every enabled consumer must be actively subscribed on the broker.

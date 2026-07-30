@@ -6,6 +6,8 @@ Thumper is configured under the `thumper` key in your RoadRunner `.rr.yaml`.
 
 ```yaml
 thumper:
+  disable_consumers: false
+
   pool:
     num_workers: 4
     supervisor:
@@ -114,3 +116,7 @@ Map key is used as `queue` if `queue` is not set explicitly.
 ### `pool`
 
 Worker pool configuration. See [RoadRunner pool documentation](https://docs.roadrunner.dev/docs/php-worker/pool) for all available options.
+
+### `disable_consumers`
+
+Runs thumper without consumers: no pool is started and no PHP workers are spawned. Exchanges, queues and bindings are still declared and RPC publishing stays available. Implied when no `consumers` are configured.

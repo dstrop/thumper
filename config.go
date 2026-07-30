@@ -13,6 +13,8 @@ const defaultDeclareTimeout = 30 * time.Second
 type Config struct {
 	Amqp *AmqpConfig `mapstructure:"amqp"`
 
+	DisableConsumers bool `mapstructure:"disable_consumers"`
+
 	Pool *pool.Config `mapstructure:"pool"`
 
 	Consumers map[string]*ConsumerConfig `mapstructure:"consumers"`
@@ -85,6 +87,10 @@ func (c *Config) InitDefaults() {
 				exchange.Name = key
 			}
 		}
+	}
+
+	if len(c.Consumers) == 0 {
+		c.DisableConsumers = true
 	}
 
 	if c.Pool == nil {

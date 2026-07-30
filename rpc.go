@@ -223,6 +223,9 @@ func (r *rpc) setEnabled(name string, enabled bool) error {
 	if _, ok := r.plugin.runners[name]; !ok {
 		return fmt.Errorf("consumer %q not found", name)
 	}
+	if enabled && r.plugin.cfg.DisableConsumers {
+		return fmt.Errorf("consuming is disabled for this instance (disable_consumers)")
+	}
 	r.plugin.cfg.Consumers[name].Enabled = &enabled
 	return nil
 }
