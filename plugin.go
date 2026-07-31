@@ -368,7 +368,7 @@ func (p *Plugin) Workers() []*process.State {
 	defer p.mu.RUnlock()
 
 	if p.pool == nil {
-		return nil
+		return []*process.State{}
 	}
 
 	workers := p.pool.Workers()
@@ -377,7 +377,7 @@ func (p *Plugin) Workers() []*process.State {
 		state, err := process.WorkerProcessState(workers[i])
 		if err != nil {
 			p.log.Error("workers state", zap.Error(err))
-			return nil
+			return ps
 		}
 		ps = append(ps, state)
 	}

@@ -24,35 +24,43 @@ final class StatusCommand extends Command
         $status = $this->thumper->status();
 
         $output->writeln('<info>Consumers</info>');
-        $consumers = new Table($output);
-        $consumers->setHeaders(['Consumer', 'Queue', 'Enabled', 'Running', 'Concurrency', 'Prefetch']);
-        foreach ($status['consumers'] as $name => $consumer) {
-            $consumers->addRow([
-                $name,
-                $consumer['queue'],
-                $consumer['enabled'] ? '<info>yes</info>' : '<comment>no</comment>',
-                $consumer['running'] ? '<info>yes</info>' : '<comment>no</comment>',
-                $consumer['concurrency'],
-                $consumer['prefetch'],
-            ]);
+        if ($status['consumers'] === []) {
+            $output->writeln('<comment>none configured</comment>');
+        } else {
+            $consumers = new Table($output);
+            $consumers->setHeaders(['Consumer', 'Queue', 'Enabled', 'Running', 'Concurrency', 'Prefetch']);
+            foreach ($status['consumers'] as $name => $consumer) {
+                $consumers->addRow([
+                    $name,
+                    $consumer['queue'],
+                    $consumer['enabled'] ? '<info>yes</info>' : '<comment>no</comment>',
+                    $consumer['running'] ? '<info>yes</info>' : '<comment>no</comment>',
+                    $consumer['concurrency'],
+                    $consumer['prefetch'],
+                ]);
+            }
+            $consumers->render();
         }
-        $consumers->render();
 
         $output->writeln('');
 
         $output->writeln('<info>Workers</info>');
-        $workers = new Table($output);
-        $workers->setHeaders(['PID', 'Status', 'Execs', 'Memory', 'CPU%']);
-        foreach ($status['workers'] as $worker) {
-            $workers->addRow([
-                $worker['pid'],
-                $worker['statusStr'],
-                $worker['numExecs'],
-                $this->formatMemory((int) $worker['memoryUsage']),
-                \number_format((float) $worker['CPUPercent'], 1) . '%',
-            ]);
+        if ($status['workers'] === []) {
+            $output->writeln('<comment>none running</comment>');
+        } else {
+            $workers = new Table($output);
+            $workers->setHeaders(['PID', 'Status', 'Execs', 'Memory', 'CPU%']);
+            foreach ($status['workers'] as $worker) {
+                $workers->addRow([
+                    $worker['pid'],
+                    $worker['statusStr'],
+                    $worker['numExecs'],
+                    $this->formatMemory((int) $worker['memoryUsage']),
+                    \number_format((float) $worker['CPUPercent'], 1) . '%',
+                ]);
+            }
+            $workers->render();
         }
-        $workers->render();
 
         return Command::SUCCESS;
     }

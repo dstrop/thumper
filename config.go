@@ -100,6 +100,9 @@ func (c *Config) InitDefaults() {
 
 	for name, cc := range c.Consumers {
 		cc.InitDefaults(name)
+		if c.DisableConsumers {
+			cc.Enabled = new(false)
+		}
 	}
 }
 
