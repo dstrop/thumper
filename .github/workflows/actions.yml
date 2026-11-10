@@ -43,7 +43,7 @@ jobs:
   go-lint:
     runs-on: ubuntu-latest
     container:
-      image: golangci/golangci-lint:v2.11.4-alpine
+      image: golangci/golangci-lint:v2.15.0-alpine
 
     steps:
       - name: Checkout code
