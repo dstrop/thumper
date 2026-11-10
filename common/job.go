@@ -6,9 +6,14 @@ import amqp091 "github.com/rabbitmq/amqp091-go"
 type Action int
 
 const (
+	// ActionAck settles with basic.ack.
 	ActionAck Action = iota
+	// ActionNack settles with basic.nack requeue=true (does not count toward delivery-limit on RabbitMQ 4.3+).
 	ActionNack
+	// ActionReject settles with basic.reject requeue=false (dead-letter or drop).
 	ActionReject
+	// ActionRetry settles with basic.reject requeue=true (counts toward delivery-limit).
+	ActionRetry
 )
 
 func (a Action) Label() string {
@@ -19,6 +24,8 @@ func (a Action) Label() string {
 		return "reject"
 	case ActionNack:
 		return "nack"
+	case ActionRetry:
+		return "retry"
 	default:
 		return "unknown"
 	}
