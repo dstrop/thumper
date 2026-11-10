@@ -25,6 +25,7 @@ const (
 	resultAck    byte = '0'
 	resultNack   byte = '1'
 	resultReject byte = '2'
+	resultRetry  byte = '3'
 )
 
 // Worker manages a roadrunner pool and a set of reader goroutines that read jobs from a channel and execute them on the pool.
@@ -183,6 +184,8 @@ func (w *Worker) parseResult(queue string, body []byte) common.Action {
 		return common.ActionNack
 	case resultReject:
 		return common.ActionReject
+	case resultRetry:
+		return common.ActionRetry
 	default:
 		w.log.Warn("unknown worker result byte",
 			zap.String("queue", queue), zap.Uint8("byte", body[0]))

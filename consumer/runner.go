@@ -131,6 +131,8 @@ func (r *Runner) settle(d amqp091.Delivery, a common.Action) {
 		err = d.Nack(false, true)
 	case common.ActionReject:
 		err = d.Reject(false)
+	case common.ActionRetry:
+		err = d.Reject(true)
 	}
 	if err != nil {
 		r.log.Warn("settle failed, broker will requeue on channel close",
