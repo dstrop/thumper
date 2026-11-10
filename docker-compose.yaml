@@ -18,7 +18,7 @@ services:
       context: .dev
       dockerfile: Dockerfile
       args:
-          GO_VERSION: 1.24.0
+          GO_VERSION: 1.27.3
     image: thumper-php:latest
 
     volumes:
