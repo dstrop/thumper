@@ -10,7 +10,7 @@ server:
     relay: pipes
 
 thumper:
-  disable_consumers: true
+  disable_consumers: false
 
   pool:
     num_workers: 1
@@ -53,14 +53,20 @@ thumper:
       queue1:
         durable: true
         args:
-          x-key1: value1
-          x-key2: value2
+          x-queue-type: quorum
+          x-delivery-limit: 3
+          x-dead-letter-exchange: ''
+          x-dead-letter-routing-key: queue1-dead
         bindings:
           exchange1:
             key: key1
             args:
               x-key1: value1
               x-key2: value2
+      queue1-dead:
+        durable: true
+        args:
+          x-queue-type: quorum
       queue2:
         durable: true
         args:
