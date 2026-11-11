@@ -65,8 +65,8 @@ func TestWithChannel(t *testing.T) {
 		semanticServer = &amqp.Error{Code: 406, Reason: "PRECONDITION_FAILED", Server: true}
 		semanticClient = &amqp.Error{Code: 504, Reason: "channel error", Server: false}
 		ioErr          = errors.New("connection reset by peer")
-		acquireErr     = errors.New("acquire boom")
-		// acquireErr     = amqp.ErrChannelMax
+		// a realistic non-recoverable acquire failure: conn.Channel() returns *amqp.Error
+		acquireErr = amqp.ErrChannelMax
 	)
 
 	// Each case drives a single pass through withChannel's loop. On entry, fn
