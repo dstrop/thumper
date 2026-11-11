@@ -1,5 +1,5 @@
 [roadrunner]
-ref = "v2025.1.13"
+ref = "v2025.1.15"
 
 [debug]
 enabled = false
@@ -37,7 +37,7 @@ gzip = { owner = "roadrunner-server", repository = "gzip", ref = "v5.3.0" }
 prometheus = { owner = "roadrunner-server", repository = "prometheus", ref = "v5.2.0" }
 send = { owner = "roadrunner-server", repository = "send", ref = "v5.2.0" }
 proxyIP = { owner = "roadrunner-server", repository = "proxy_ip_parser", ref = "v5.1.9" }
-rrOtel = { owner = "roadrunner-server", repository = "otel", ref = "v5.5.0" }
+rrOtel = { owner = "roadrunner-server", repository = "otel", ref = "v5.6.0" }
 fileserver = { owner = "roadrunner-server", repository = "fileserver", ref = "v5.1.9" }
 grpcPlugin = { owner = "roadrunner-server", repository = "grpc", ref = "v5.3.0" }
 memory = { owner = "roadrunner-server", repository = "memory", ref = "v5.2.9" }
@@ -46,7 +46,7 @@ kv = { owner = "roadrunner-server", repository = "kv", ref = "v5.2.9" }
 memcached = { owner = "roadrunner-server", repository = "memcached", ref = "v5.1.9" }
 redis = { owner = "roadrunner-server", repository = "redis", ref = "v5.1.10" }
 tcp = { owner = "roadrunner-server", repository = "tcp", ref = "v5.1.9" }
-rrt = { owner = "temporalio", repository = "roadrunner-temporal", ref = "v5.10.0" }
+rrt = { owner = "temporalio", repository = "roadrunner-temporal", ref = "v5.11.0" }
 
 [github.plugins.thumper]
 ref = "master"
