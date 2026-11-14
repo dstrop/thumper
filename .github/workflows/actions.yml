@@ -86,7 +86,6 @@ jobs:
           touch .env
           docker compose run --rm --no-deps \
               -e RT_TOKEN="$GITHUB_TOKEN" \
-              -e TIME="$(date +%FT%T%z)" \
               -e GOARCH=${{ matrix.platform }} \
             velox
 

@@ -46,14 +46,15 @@ services:
       - go-pkg:/root/go/pkg
       - go-cache:/root/.cache
     working_dir: /plugin
-    environment:
-      VERSION: ''
-      TIME: ''
-
-      CGO_ENABLED: 0
-      GOOS: linux
-      GOARCH: amd64
-    command: build -c velox_rr.toml -o /plugin
+    entrypoint:
+      - /bin/sh
+      - -euc
+      - |
+        cp velox_rr.toml /tmp/velox.toml
+        if [ -n "$${GOARCH:-}" ]; then
+          printf '\n[target_platform]\nos = "linux"\narch = "%s"\n' "$$GOARCH" >> /tmp/velox.toml
+        fi
+        exec vx build -c /tmp/velox.toml -o /plugin
     env_file:
       - .env
 

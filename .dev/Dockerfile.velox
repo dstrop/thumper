@@ -1,5 +1,5 @@
 FROM golang:1.27-alpine
 
-COPY --from=ghcr.io/roadrunner-server/velox:2025.1.7 /usr/bin/vx /usr/bin/vx
+COPY --from=ghcr.io/roadrunner-server/velox:3.0.1 /usr/bin/vx /usr/bin/vx
 
 ENTRYPOINT [ "/usr/bin/vx" ]

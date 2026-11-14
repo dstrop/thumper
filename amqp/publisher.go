@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 
 	amqp "github.com/rabbitmq/amqp091-go"
-	"go.uber.org/zap"
 )
 
 // PublisherOptions configures a Publisher.
@@ -158,9 +158,9 @@ func (p *Publisher) withChannel(ctx context.Context, fn func(*amqp.Channel) erro
 			return fmt.Errorf("%w; last error: %w", ErrClosed, err)
 		}
 		p.conn.log.Debug("recoverable error, retrying on a fresh channel",
-			zap.Int("attempt", attempt),
-			zap.Duration("backoff", delay),
-			zap.Error(err))
+			slog.Int("attempt", attempt),
+			slog.Duration("backoff", delay),
+			slog.Any("error", err))
 	}
 }
 

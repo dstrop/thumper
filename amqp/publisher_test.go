@@ -3,11 +3,11 @@ package amqp
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"testing"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
-	"go.uber.org/zap"
 )
 
 // fakeSource is a channelPooler that hands out nil channels (test fns never
@@ -38,7 +38,7 @@ func newTestPublisher(src channelPooler) *Publisher {
 		conn: &connection{
 			reconnectDelay: time.Millisecond,
 			done:           make(chan struct{}),
-			log:            zap.NewNop(),
+			log:            slog.New(slog.DiscardHandler),
 		},
 		pool: src,
 	}

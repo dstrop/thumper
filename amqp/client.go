@@ -1,9 +1,8 @@
 package amqp
 
 import (
+	"log/slog"
 	"time"
-
-	"go.uber.org/zap"
 )
 
 // Client is a factory for creating consumers and publishers with their own dedicated connections.
@@ -11,10 +10,10 @@ type Client struct {
 	url            string
 	reconnectDelay time.Duration
 	metrics        *ConnectionMetrics
-	log            *zap.Logger
+	log            *slog.Logger
 }
 
-func NewClient(url string, reconnectDelay time.Duration, metrics *ConnectionMetrics, log *zap.Logger) *Client {
+func NewClient(url string, reconnectDelay time.Duration, metrics *ConnectionMetrics, log *slog.Logger) *Client {
 	return &Client{
 		url:            url,
 		reconnectDelay: reconnectDelay,

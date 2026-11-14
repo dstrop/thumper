@@ -3,6 +3,7 @@ package thumper
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"sync"
 	"time"
@@ -13,10 +14,9 @@ import (
 	"github.com/dstrop/thumper/worker"
 	"github.com/prometheus/client_golang/prometheus"
 	amqp091 "github.com/rabbitmq/amqp091-go"
-	"github.com/roadrunner-server/api/v4/plugins/v1/status"
+	"github.com/roadrunner-server/api-plugins/v6/status"
 	"github.com/roadrunner-server/errors"
-	"github.com/roadrunner-server/pool/state/process"
-	"go.uber.org/zap"
+	"github.com/roadrunner-server/pool/v2/state/process"
 )
 
 const pluginName string = "thumper"
@@ -28,7 +28,7 @@ const (
 
 type Plugin struct {
 	cfg    *Config
-	log    *zap.Logger
+	log    *slog.Logger
 	server common.Server
 
 	mu      sync.RWMutex
@@ -126,7 +126,7 @@ func (p *Plugin) Serve() chan error {
 	err := p.declare(declareCtx, publisher)
 	declareCancel()
 	if err != nil {
-		p.log.Error("failed to declare amqp entities", zap.Error(err))
+		p.log.Error("failed to declare amqp entities", slog.Any("error", err))
 		errCh <- err
 		return errCh
 	}
@@ -137,7 +137,7 @@ func (p *Plugin) Serve() chan error {
 		p.mu.Unlock()
 
 		p.log.Info("consumers disabled, publishing only",
-			zap.Int("consumers_configured", len(p.cfg.Consumers)))
+			slog.Int("consumers_configured", len(p.cfg.Consumers)))
 		return errCh
 	}
 
@@ -147,7 +147,7 @@ func (p *Plugin) Serve() chan error {
 
 	p.pool, err = p.server.NewPool(ctx, p.cfg.Pool, nil, p.log)
 	if err != nil {
-		p.log.Error("failed to create pool", zap.Error(err))
+		p.log.Error("failed to create pool", slog.Any("error", err))
 		_ = p.amqpConsumer.Close()
 		p.pool = nil
 		p.mu.Unlock()
@@ -173,17 +173,17 @@ func (p *Plugin) Serve() chan error {
 
 	p.mu.Unlock()
 
-	p.log.Info("worker pool started", zap.Uint64("workers", p.cfg.Pool.NumWorkers))
+	p.log.Info("worker pool started", slog.Uint64("workers", p.cfg.Pool.NumWorkers))
 
 	for _, name := range consumers {
 		if err := p.startRunner(name); err != nil {
-			p.log.Error("failed to start consumer", zap.String("name", name), zap.Error(err))
+			p.log.Error("failed to start consumer", slog.String("name", name), slog.Any("error", err))
 			continue
 		}
 	}
 	p.log.Info("thumper started",
-		zap.Int("consumers_started", len(consumers)),
-		zap.Int("consumers_configured", len(p.cfg.Consumers)))
+		slog.Int("consumers_started", len(consumers)),
+		slog.Int("consumers_configured", len(p.cfg.Consumers)))
 
 	return errCh
 }
@@ -219,7 +219,7 @@ func (p *Plugin) startRunner(name string) error {
 
 	if !r.Start(sub.Deliveries(), p.jobs) {
 		cancel() // already running
-		p.log.Debug("consumer already running", zap.String("name", name))
+		p.log.Debug("consumer already running", slog.String("name", name))
 		return nil
 	}
 
@@ -229,10 +229,10 @@ func (p *Plugin) startRunner(name string) error {
 	p.mu.Unlock()
 
 	p.log.Info("consumer started",
-		zap.String("name", name),
-		zap.String("queue", cc.Queue),
-		zap.Int("concurrency", cc.Concurrency),
-		zap.Int("prefetch", cc.Prefetch))
+		slog.String("name", name),
+		slog.String("queue", cc.Queue),
+		slog.Int("concurrency", cc.Concurrency),
+		slog.Int("prefetch", cc.Prefetch))
 
 	return nil
 }
@@ -248,7 +248,7 @@ func (p *Plugin) stopRunner(name string) <-chan struct{} {
 	r := p.runners[name]
 	p.mu.Unlock()
 
-	p.log.Info("stopping consumer", zap.String("name", name))
+	p.log.Info("stopping consumer", slog.String("name", name))
 
 	runnerDone := r.Stop() // cancel pump; AMQP channel still live
 
@@ -260,7 +260,7 @@ func (p *Plugin) stopRunner(name string) <-chan struct{} {
 		if consumeCancel != nil {
 			consumeCancel() // now safe to close the AMQP channel
 		}
-		p.log.Info("consumer stopped", zap.String("name", name))
+		p.log.Info("consumer stopped", slog.String("name", name))
 		close(done)
 	}()
 	return done
@@ -268,7 +268,7 @@ func (p *Plugin) stopRunner(name string) <-chan struct{} {
 
 func (p *Plugin) declare(ctx context.Context, publisher *amqp.Publisher) error {
 	for _, exchangeConfig := range p.cfg.Amqp.Exchange {
-		p.log.Debug("declaring exchange", zap.Any("exchange", exchangeConfig))
+		p.log.Debug("declaring exchange", slog.Any("exchange", exchangeConfig))
 		err := publisher.DeclareExchange(ctx, amqp.ExchangeOptions{
 			Name:       exchangeConfig.Name,
 			Kind:       exchangeConfig.Kind,
@@ -284,7 +284,7 @@ func (p *Plugin) declare(ctx context.Context, publisher *amqp.Publisher) error {
 	}
 
 	for _, queueConfig := range p.cfg.Amqp.Queue {
-		p.log.Debug("declaring queue", zap.Any("queue", queueConfig))
+		p.log.Debug("declaring queue", slog.Any("queue", queueConfig))
 		_, err := publisher.DeclareQueue(ctx, amqp.QueueOptions{
 			Name:       queueConfig.Name,
 			Durable:    queueConfig.Durable,
@@ -298,7 +298,7 @@ func (p *Plugin) declare(ctx context.Context, publisher *amqp.Publisher) error {
 		}
 
 		for _, binding := range queueConfig.Bindings {
-			p.log.Debug("binding queue", zap.String("queue", queueConfig.Name), zap.String("exchange", binding.Exchange))
+			p.log.Debug("binding queue", slog.String("queue", queueConfig.Name), slog.String("exchange", binding.Exchange))
 			err = publisher.DeclareBinding(ctx, amqp.BindingOptions{
 				Queue:      queueConfig.Name,
 				Exchange:   binding.Exchange,
@@ -335,13 +335,13 @@ func (p *Plugin) Stop(ctx context.Context) error {
 		case <-d:
 		case <-ctx.Done():
 			p.log.Warn("stop deadline reached; in-flight will be requeued",
-				zap.String("consumer", running[i]))
+				slog.String("consumer", running[i]))
 		}
 	}
 
 	if p.wp != nil {
 		if err := p.wp.Stop(ctx); err != nil {
-			p.log.Warn("worker stop deadline exceeded", zap.Error(err))
+			p.log.Warn("worker stop deadline exceeded", slog.Any("error", err))
 		}
 	}
 
@@ -354,7 +354,7 @@ func (p *Plugin) Stop(ctx context.Context) error {
 
 	if p.amqpConsumer != nil {
 		if err := p.amqpConsumer.Close(); err != nil {
-			p.log.Warn("amqp consumer close error", zap.Error(err))
+			p.log.Warn("amqp consumer close error", slog.Any("error", err))
 		}
 		p.amqpConsumer = nil
 	}
@@ -376,7 +376,7 @@ func (p *Plugin) Workers() []*process.State {
 	for i := range workers {
 		state, err := process.WorkerProcessState(workers[i])
 		if err != nil {
-			p.log.Error("workers state", zap.Error(err))
+			p.log.Error("workers state", slog.Any("error", err))
 			return ps
 		}
 		ps = append(ps, state)

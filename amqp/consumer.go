@@ -3,10 +3,10 @@ package amqp
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"sync/atomic"
 
 	amqp "github.com/rabbitmq/amqp091-go"
-	"go.uber.org/zap"
 )
 
 // ConsumeOptions configures a single Consume call.
@@ -86,8 +86,8 @@ func (c *Consumer) consume(ctx context.Context, opts ConsumeOptions, sub *Subscr
 	defer close(sub.deliveries)
 
 	log := c.conn.log.With(
-		zap.String("queue", opts.Queue),
-		zap.String("consumer_tag", opts.ConsumerTag))
+		slog.String("queue", opts.Queue),
+		slog.String("consumer_tag", opts.ConsumerTag))
 
 	attempt := 0
 
@@ -102,8 +102,8 @@ func (c *Consumer) consume(ctx context.Context, opts ConsumeOptions, sub *Subscr
 			attempt++
 			delay := backoff(c.conn.reconnectDelay, attempt)
 			log.Warn("consumer setup failed, retrying",
-				zap.Error(err),
-				zap.Duration("retry_in", delay))
+				slog.Any("error", err),
+				slog.Duration("retry_in", delay))
 			if !wait(ctx, c.conn.done, delay) {
 				return
 			}

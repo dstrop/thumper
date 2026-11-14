@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/dstrop/thumper"
-	"github.com/roadrunner-server/roadrunner/v2025/lib"
+	"github.com/roadrunner-server/roadrunner/v3/lib"
 )
 
 func main() {

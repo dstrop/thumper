@@ -4,12 +4,12 @@ help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 
 build: ## build dev rr binary for amd64
-	docker compose run --rm -e TIME="$(shell date +%FT%T%z)" -e GOARCH=amd64 velox
+	docker compose run --rm -e GOARCH=amd64 velox
 	docker compose run --rm --entrypoint chown velox "$(shell id -u):$(shell id -g)" rr
 	chmod a+x rr
 
 build-arm: ## build dev rr binary for arm64
-	docker compose run --rm -e TIME="$(shell date +%FT%T%z)" -e GOARCH=arm64 velox
+	docker compose run --rm -e GOARCH=arm64 velox
 	docker compose run --rm --entrypoint chown velox "$(shell id -u):$(shell id -g)" rr
 	chmod a+x rr
 

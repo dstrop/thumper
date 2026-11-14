@@ -1,4 +1,4 @@
-FROM ghcr.io/roadrunner-server/roadrunner:2025.1.15
+FROM ghcr.io/roadrunner-server/roadrunner:3.0.1
 
 ARG TARGETARCH
 

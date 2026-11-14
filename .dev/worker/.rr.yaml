@@ -9,6 +9,12 @@ server:
     command: 'php consumer.php'
     relay: pipes
 
+logs:
+    channels:
+        server:
+            mode: raw
+            level: info
+
 thumper:
   disable_consumers: false
 

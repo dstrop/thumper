@@ -2,10 +2,10 @@ package consumer
 
 import (
 	"context"
+	"log/slog"
 	"sync"
 
 	amqp091 "github.com/rabbitmq/amqp091-go"
-	"go.uber.org/zap"
 
 	"github.com/dstrop/thumper/common"
 )
@@ -17,7 +17,7 @@ type Runner struct {
 	queue string
 
 	sem *sem // per-queue concurrency limiter
-	log *zap.Logger
+	log *slog.Logger
 
 	inflight sync.WaitGroup // unsettled deliveries; Stop waits on it before exit
 
@@ -26,7 +26,7 @@ type Runner struct {
 	activeDone chan struct{}      // non-nil while a run goroutine is active; closed on exit
 }
 
-func NewRunner(name, queue string, concurrency int, log *zap.Logger) *Runner {
+func NewRunner(name, queue string, concurrency int, log *slog.Logger) *Runner {
 	return &Runner{
 		name:  name,
 		queue: queue,
@@ -136,9 +136,9 @@ func (r *Runner) settle(d amqp091.Delivery, a common.Action) {
 	}
 	if err != nil {
 		r.log.Warn("settle failed, broker will requeue on channel close",
-			zap.String("queue", r.queue),
-			zap.Uint64("delivery_tag", d.DeliveryTag),
-			zap.Error(err))
+			slog.String("queue", r.queue),
+			slog.Uint64("delivery_tag", d.DeliveryTag),
+			slog.Any("error", err))
 	}
 }
 

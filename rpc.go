@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/dstrop/thumper/amqp"
 	amqp091 "github.com/rabbitmq/amqp091-go"
-	"github.com/roadrunner-server/pool/state/process"
-	"go.uber.org/zap"
+	"github.com/roadrunner-server/pool/v2/state/process"
 )
 
 const defaultRPCTimeout = 30 * time.Second
@@ -185,8 +185,8 @@ func (r *rpc) SetConcurrency(req *SetConcurrencyRequest, _ *bool) error {
 	runner.Resize(req.Concurrency)
 	r.plugin.metrics.consumerConcurrency.WithLabelValues(req.Name, runner.Status().Queue).Set(float64(req.Concurrency))
 	r.plugin.log.Info("consumer concurrency changed via rpc",
-		zap.String("name", req.Name),
-		zap.Int("concurrency", req.Concurrency))
+		slog.String("name", req.Name),
+		slog.Int("concurrency", req.Concurrency))
 	return nil
 }
 
@@ -207,7 +207,7 @@ func (r *rpc) SetWorkers(req *SetWorkersRequest, _ *bool) error {
 	if err := wp.Resize(req.Workers); err != nil {
 		return err
 	}
-	r.plugin.log.Info("worker count changed via rpc", zap.Int("workers", req.Workers))
+	r.plugin.log.Info("worker count changed via rpc", slog.Int("workers", req.Workers))
 	return nil
 }
 
@@ -234,7 +234,7 @@ func (r *rpc) EnableConsumer(req *ConsumerRequest, _ *bool) error {
 	if err := r.setEnabled(req.Name, true); err != nil {
 		return err
 	}
-	r.plugin.log.Info("enabling consumer via rpc", zap.String("name", req.Name))
+	r.plugin.log.Info("enabling consumer via rpc", slog.String("name", req.Name))
 	return r.plugin.startRunner(req.Name)
 }
 
@@ -242,7 +242,7 @@ func (r *rpc) DisableConsumer(req *ConsumerRequest, _ *bool) error {
 	if err := r.setEnabled(req.Name, false); err != nil {
 		return err
 	}
-	r.plugin.log.Info("disabling consumer via rpc", zap.String("name", req.Name))
+	r.plugin.log.Info("disabling consumer via rpc", slog.String("name", req.Name))
 	if d := r.plugin.stopRunner(req.Name); d != nil {
 		<-d
 	}

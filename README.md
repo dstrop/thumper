@@ -1,7 +1,7 @@
 # Thumper
 
 Thumper is a simple RabbitMQ client for RoadRunner workers.  
-It utilizes RoadRunner's process manager to manage RabbitMQ consumers.
+It uses RoadRunner's process manager to manage RabbitMQ consumers.
 
 Main goals of this plugin are:
 - allow single worker to consume multiple queues
@@ -20,8 +20,6 @@ Copy the [.env.example](.env.example) file to `.env` and fill in your github tok
 ```bash
 docker compose run --rm \
     -e RT_TOKEN=read_only_github_token \
-    -e TIME="$(date +%FT%T%z)" \
-    -e GOOS=linux \
     -e GOARCH=amd64 \
     velox
 ```
@@ -33,15 +31,14 @@ You can use the [RoadRunner Velox Builder](https://build.roadrunner.dev/) to gen
 Thumper is not available in the builder, so you will need to manually add it to the `plugins` section of your config:
 
 ```toml
-[github.plugins.thumper]
-ref = "v0.0.0"
-owner = "dstrop"
-repository = "thumper"
+[plugins.thumper]
+module_name = "github.com/dstrop/thumper"
+tag = "v0.0.0"
 ```
 
 Replace `v0.0.0` with the actual version you want to use. You can find the version by checking the latest tags in the `thumper` repository.
 
-For more detailed information on customizing the build process, refer to the [RoadRunner customization documentation](https://docs.roadrunner.dev/docs/customization/build).
+For more build options, see the [RoadRunner customization documentation](https://docs.roadrunner.dev/docs/customization/build).
 
 ## Development
 

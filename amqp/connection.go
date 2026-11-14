@@ -2,11 +2,11 @@ package amqp
 
 import (
 	"context"
+	"log/slog"
 	"sync"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
-	"go.uber.org/zap"
 )
 
 // connection wraps an amqp.Connection and manages reconnecting.
@@ -16,7 +16,7 @@ type connection struct {
 
 	role    string
 	metrics *ConnectionMetrics
-	log     *zap.Logger
+	log     *slog.Logger
 
 	mu sync.Mutex
 
@@ -39,7 +39,7 @@ func newConnection(client *Client, role string) *connection {
 		reconnectDelay: reconnectDelay,
 		role:           role,
 		metrics:        client.metrics,
-		log:            client.log.With(zap.String("connection", role)),
+		log:            client.log.With(slog.String("connection", role)),
 		ready:          make(chan struct{}),
 		done:           make(chan struct{}),
 	}
@@ -103,8 +103,8 @@ func (c *connection) reconnectLoop() {
 			delay := backoff(c.reconnectDelay, attempt)
 			c.metrics.incDialFailures(c.role)
 			c.log.Warn("amqp dial failed, retrying",
-				zap.Error(err),
-				zap.Duration("retry_in", delay))
+				slog.Any("error", err),
+				slog.Duration("retry_in", delay))
 			if !wait(context.Background(), c.done, delay) {
 				return
 			}
@@ -124,7 +124,7 @@ func (c *connection) reconnectLoop() {
 
 		connectDuration := time.Since(disconnectedAt)
 		c.metrics.observeConnectDuration(c.role, connectDuration)
-		c.log.Info("amqp connected", zap.Duration("connect_duration", connectDuration))
+		c.log.Info("amqp connected", slog.Duration("connect_duration", connectDuration))
 		c.metrics.setConnectionUp(c.role, 1)
 
 		notifyClose := make(chan *amqp.Error, 1)
@@ -136,7 +136,7 @@ func (c *connection) reconnectLoop() {
 			c.metrics.incConnectionLost(c.role)
 			disconnectedAt = time.Now()
 			if closeErr != nil {
-				c.log.Warn("amqp connection lost", zap.Error(closeErr))
+				c.log.Warn("amqp connection lost", slog.Any("error", closeErr))
 			} else {
 				c.log.Info("amqp connection closed")
 			}

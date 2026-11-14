@@ -4,13 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
 	"github.com/dstrop/thumper/common"
 	amqp091 "github.com/rabbitmq/amqp091-go"
-	"github.com/roadrunner-server/pool/payload"
-	"go.uber.org/zap"
+	"github.com/roadrunner-server/pool/v2/payload"
 )
 
 // Observer is an interface for observing message processing metrics.
@@ -32,7 +32,7 @@ const (
 type Worker struct {
 	pool       common.Pool
 	numWorkers int
-	log        *zap.Logger
+	log        *slog.Logger
 	metrics    Observer
 
 	jobs    <-chan common.Job
@@ -42,7 +42,7 @@ type Worker struct {
 	mu      sync.Mutex
 }
 
-func New(pool common.Pool, numWorkers int, jobs <-chan common.Job, log *zap.Logger, metrics Observer) *Worker {
+func New(pool common.Pool, numWorkers int, jobs <-chan common.Job, log *slog.Logger, metrics Observer) *Worker {
 	return &Worker{
 		pool:       pool,
 		numWorkers: numWorkers,
@@ -140,7 +140,7 @@ func (w *Worker) process(queue, consumer string, d amqp091.Delivery) common.Acti
 	pld, err := buildPayload(queue, consumer, d)
 	if err != nil {
 		w.log.Error("payload build failed, rejecting",
-			zap.String("queue", queue), zap.Error(err))
+			slog.String("queue", queue), slog.Any("error", err))
 		return common.ActionReject
 	}
 
@@ -148,7 +148,7 @@ func (w *Worker) process(queue, consumer string, d amqp091.Delivery) common.Acti
 
 	resCh, err := w.pool.Exec(context.Background(), pld, nil)
 	if err != nil {
-		w.log.Warn("exec failed", zap.String("queue", queue), zap.Error(err))
+		w.log.Warn("exec failed", slog.String("queue", queue), slog.Any("error", err))
 		w.metrics.ObserveMessage(consumer, queue, "crash", time.Since(start))
 		return common.ActionNack
 	}
@@ -157,11 +157,11 @@ func (w *Worker) process(queue, consumer string, d amqp091.Delivery) common.Acti
 
 	switch {
 	case !ok || res == nil:
-		w.log.Warn("empty worker response", zap.String("queue", queue))
+		w.log.Warn("empty worker response", slog.String("queue", queue))
 		w.metrics.ObserveMessage(consumer, queue, "crash", elapsed)
 		return common.ActionNack
 	case res.Error() != nil:
-		w.log.Warn("worker error", zap.String("queue", queue), zap.Error(res.Error()))
+		w.log.Warn("worker error", slog.String("queue", queue), slog.Any("error", res.Error()))
 		w.metrics.ObserveMessage(consumer, queue, "crash", elapsed)
 		return common.ActionNack
 	default:
@@ -174,7 +174,7 @@ func (w *Worker) process(queue, consumer string, d amqp091.Delivery) common.Acti
 // parseResult interprets the worker's response body as an action enum.
 func (w *Worker) parseResult(queue string, body []byte) common.Action {
 	if len(body) == 0 {
-		w.log.Warn("worker returned empty body", zap.String("queue", queue))
+		w.log.Warn("worker returned empty body", slog.String("queue", queue))
 		return common.ActionNack
 	}
 	switch body[0] {
@@ -188,7 +188,7 @@ func (w *Worker) parseResult(queue string, body []byte) common.Action {
 		return common.ActionRetry
 	default:
 		w.log.Warn("unknown worker result byte",
-			zap.String("queue", queue), zap.Uint8("byte", body[0]))
+			slog.String("queue", queue), slog.Int("byte", int(body[0])))
 		return common.ActionNack
 	}
 }

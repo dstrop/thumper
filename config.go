@@ -4,8 +4,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/roadrunner-server/config/v5"
-	"github.com/roadrunner-server/pool/pool"
+	"github.com/roadrunner-server/config/v6"
+	"github.com/roadrunner-server/pool/v2/pool"
 )
 
 const defaultDeclareTimeout = 30 * time.Second
