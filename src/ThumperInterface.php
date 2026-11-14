@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Thumper;
 
+use Spiral\Goridge\RPC\Exception\ServiceException;
+use Thumper\Exception\ThumperException;
+
 /**
  * @phpstan-type ConsumerStatus array{
  *     queue: string,
@@ -31,6 +34,9 @@ interface ThumperInterface
 {
     /**
      * @param array<string, mixed> $headers
+     *
+     * @throws ThumperException RabbitMQ error, see the subclasses in Thumper\Exception
+     * @throws ServiceException any other error reported by the plugin
      */
     public function publish(
         string $exchange,
@@ -55,6 +61,9 @@ interface ThumperInterface
 
     /**
      * @param array<string, mixed> $args
+     *
+     * @throws ThumperException RabbitMQ error, see the subclasses in Thumper\Exception
+     * @throws ServiceException any other error reported by the plugin
      */
     public function exchangeDeclare(
         string $name,
@@ -68,6 +77,9 @@ interface ThumperInterface
 
     /**
      * @param array<string, mixed> $args
+     *
+     * @throws ThumperException RabbitMQ error, see the subclasses in Thumper\Exception
+     * @throws ServiceException any other error reported by the plugin
      */
     public function queueDeclare(
         string $name,
@@ -80,6 +92,9 @@ interface ThumperInterface
 
     /**
      * @param array<string, mixed> $args
+     *
+     * @throws ThumperException RabbitMQ error, see the subclasses in Thumper\Exception
+     * @throws ServiceException any other error reported by the plugin
      */
     public function bindQueue(
         string $queue,

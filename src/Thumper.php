@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Thumper;
 
+use Spiral\Goridge\RPC\Exception\ServiceException;
 use Spiral\Goridge\RPC\RPCInterface;
+use Thumper\Exception\ThumperException;
 
 /**
  * @phpstan-import-type StatusResponse from ThumperInterface
@@ -36,7 +38,7 @@ class Thumper implements ThumperInterface
             $payload['headers'] = $headers;
         }
 
-        $this->rpc->call('Publish', $payload);
+        $this->call('Publish', $payload);
     }
 
     /**
@@ -45,7 +47,7 @@ class Thumper implements ThumperInterface
     public function status(): array
     {
         /** @phpstan-ignore cast.string */
-        $json = (string) $this->rpc->call('Status', false);
+        $json = (string) $this->call('Status', false);
 
         /** @var StatusResponse $status */
         $status = \json_decode($json, true, flags: \JSON_THROW_ON_ERROR);
@@ -55,22 +57,22 @@ class Thumper implements ThumperInterface
 
     public function setWorkerCount(int $count): void
     {
-        $this->rpc->call('SetWorkers', ['workers' => $count]);
+        $this->call('SetWorkers', ['workers' => $count]);
     }
 
     public function setConsumerConcurrency(string $name, int $concurrency): void
     {
-        $this->rpc->call('SetConcurrency', \compact('name', 'concurrency'));
+        $this->call('SetConcurrency', \compact('name', 'concurrency'));
     }
 
     public function enableConsumer(string $name): void
     {
-        $this->rpc->call('EnableConsumer', \compact('name'));
+        $this->call('EnableConsumer', \compact('name'));
     }
 
     public function disableConsumer(string $name): void
     {
-        $this->rpc->call('DisableConsumer', \compact('name'));
+        $this->call('DisableConsumer', \compact('name'));
     }
 
     /**
@@ -92,7 +94,7 @@ class Thumper implements ThumperInterface
             $payload['args'] = $args;
         }
 
-        $this->rpc->call('DeclareExchange', $payload);
+        $this->call('DeclareExchange', $payload);
     }
 
     /**
@@ -112,7 +114,7 @@ class Thumper implements ThumperInterface
             $payload['args'] = $args;
         }
 
-        $this->rpc->call('DeclareQueue', $payload);
+        $this->call('DeclareQueue', $payload);
     }
 
     /**
@@ -131,7 +133,21 @@ class Thumper implements ThumperInterface
             $payload['args'] = $args;
         }
 
-        $this->rpc->call('BindQueue', $payload);
+        $this->call('BindQueue', $payload);
+    }
+
+    /**
+     * @param non-empty-string $method
+     *
+     * @throws ServiceException
+     */
+    private function call(string $method, mixed $payload): mixed
+    {
+        try {
+            return $this->rpc->call($method, $payload);
+        } catch (ServiceException $e) {
+            throw ThumperException::fromServiceException($e);
+        }
     }
 
     /**

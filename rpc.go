@@ -14,8 +14,6 @@ import (
 
 const defaultRPCTimeout = 30 * time.Second
 
-// TODO: improve error handling, ideally the client will be able to distinguish between rr and amqp errors
-
 type rpc struct {
 	plugin *Plugin
 }
@@ -41,7 +39,7 @@ type Message struct {
 func (r *rpc) Publish(message *Message, _ *bool) error {
 	ctx, cancel := rpcCtx(message.Timeout)
 	defer cancel()
-	return r.plugin.getPublisher().Publish(
+	return amqpRPCError(r.plugin.getPublisher().Publish(
 		ctx,
 		amqp091.Publishing{
 			Headers:      amqp091.Table(message.Headers),
@@ -53,7 +51,7 @@ func (r *rpc) Publish(message *Message, _ *bool) error {
 			Exchange:   message.Exchange,
 			RoutingKey: message.Key,
 		},
-	)
+	))
 }
 
 type Exchange struct {
@@ -70,7 +68,7 @@ type Exchange struct {
 func (r *rpc) DeclareExchange(exchange *Exchange, _ *bool) error {
 	ctx, cancel := rpcCtx(exchange.Timeout)
 	defer cancel()
-	return r.plugin.getPublisher().DeclareExchange(ctx, amqp.ExchangeOptions{
+	return amqpRPCError(r.plugin.getPublisher().DeclareExchange(ctx, amqp.ExchangeOptions{
 		Name:       exchange.Name,
 		Kind:       exchange.Kind,
 		Durable:    exchange.Durable,
@@ -78,7 +76,7 @@ func (r *rpc) DeclareExchange(exchange *Exchange, _ *bool) error {
 		Internal:   exchange.Internal,
 		NoWait:     exchange.NoWait,
 		Args:       amqp091.Table(exchange.Args),
-	})
+	}))
 }
 
 type Queue struct {
@@ -102,7 +100,7 @@ func (r *rpc) DeclareQueue(queue *Queue, _ *bool) error {
 		NoWait:     queue.NoWait,
 		Args:       amqp091.Table(queue.Args),
 	})
-	return err
+	return amqpRPCError(err)
 }
 
 type BindQueue struct {
@@ -117,13 +115,13 @@ type BindQueue struct {
 func (r *rpc) BindQueue(bind *BindQueue, _ *bool) error {
 	ctx, cancel := rpcCtx(bind.Timeout)
 	defer cancel()
-	return r.plugin.getPublisher().DeclareBinding(ctx, amqp.BindingOptions{
+	return amqpRPCError(r.plugin.getPublisher().DeclareBinding(ctx, amqp.BindingOptions{
 		Queue:      bind.Queue,
 		Exchange:   bind.Exchange,
 		RoutingKey: bind.Key,
 		NoWait:     bind.NoWait,
 		Args:       amqp091.Table(bind.Args),
-	})
+	}))
 }
 
 type ConsumerStatus struct {

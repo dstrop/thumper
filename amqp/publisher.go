@@ -53,9 +53,6 @@ type BindingOptions struct {
 	Args       amqp.Table
 }
 
-// errNacked is returned when the broker nacks a published message in confirm mode.
-var errNacked = errors.New("amqpclient: publish nacked by broker")
-
 // channelPooler abstracts *channelPool so withChannel can be tested.
 type channelPooler interface {
 	acquire(ctx context.Context) (*amqp.Channel, error)
@@ -182,7 +179,7 @@ func (p *Publisher) Publish(ctx context.Context, msg amqp.Publishing, opts Publi
 		return err
 	}
 	if !acked {
-		return errNacked
+		return ErrNacked
 	}
 	return nil
 }
