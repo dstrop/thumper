@@ -47,23 +47,24 @@ func newConnection(client *Client, role string) *connection {
 	return c
 }
 
-// newChannel create a new amqp Channel. It blocks until a live connection is available, then returns a fresh channel on it.
-func (c *connection) newChannel(ctx context.Context) (*amqp.Channel, error) {
+// newChannel waits for a live connection and returns a fresh channel and its owning connection.
+func (c *connection) newChannel(ctx context.Context) (*amqp.Channel, *amqp.Connection, error) {
 	for {
 		c.mu.Lock()
 		if c.closed {
 			c.mu.Unlock()
-			return nil, ErrClosed
+			return nil, nil, ErrClosed
 		}
 		if c.conn != nil {
 			ch, err := c.conn.Channel()
 			if err == nil {
+				conn := c.conn
 				c.mu.Unlock()
-				return ch, nil
+				return ch, conn, nil
 			}
 			if !c.conn.IsClosed() {
 				c.mu.Unlock()
-				return nil, err
+				return nil, nil, err
 			}
 
 			c.conn = nil
@@ -77,9 +78,9 @@ func (c *connection) newChannel(ctx context.Context) (*amqp.Channel, error) {
 		select {
 		case <-ready: // reconnected
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return nil, nil, ctx.Err()
 		case <-c.done:
-			return nil, ErrClosed
+			return nil, nil, ErrClosed
 		}
 	}
 }

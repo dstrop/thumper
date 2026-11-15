@@ -53,7 +53,7 @@ func (c *Consumer) Consume(ctx context.Context, opts ConsumeOptions) (*Subscript
 
 // register opens a fresh channel, applies prefetch, and starts consuming.
 func (c *Consumer) register(ctx context.Context, opts ConsumeOptions) (*amqp.Channel, <-chan amqp.Delivery, error) {
-	amqpChan, err := c.conn.newChannel(ctx)
+	amqpChan, _, err := c.conn.newChannel(ctx)
 	if err != nil {
 		return nil, nil, err
 	}

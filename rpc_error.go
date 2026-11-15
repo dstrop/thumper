@@ -49,6 +49,8 @@ func amqpRPCError(err error) error {
 	// amqp091.ErrClosed is an *amqp091.Error too, so it has to be matched before the broker errors
 	case errors.Is(err, amqp.ErrClosed), errors.Is(err, amqp091.ErrClosed):
 		return &rpcError{kind: errKindConnection, reason: err.Error(), err: err}
+	case errors.As(err, &amqpErr) && (amqpErr.Code == 320 || (amqpErr.Code >= 500 && amqpErr.Code <= 599)):
+		return &rpcError{kind: errKindConnection, reason: err.Error(), err: err}
 	case errors.As(err, &amqpErr):
 		return &rpcError{kind: errKindAMQP, code: amqpErr.Code, reason: amqpErr.Reason, err: err}
 	default:

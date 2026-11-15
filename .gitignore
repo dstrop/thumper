@@ -3,6 +3,7 @@
 /vendor
 /composer.lock
 /.php-cs-fixer.cache
+/.phpunit.cache
 /.dev/worker/vendor
 /.env
 /rr
