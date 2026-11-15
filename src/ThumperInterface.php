@@ -44,6 +44,7 @@ interface ThumperInterface
         string $contentType,
         string $body,
         array $headers = [],
+        ?float $timeout = null,
     ): void;
 
     /**
@@ -73,6 +74,7 @@ interface ThumperInterface
         bool $internal = false,
         bool $noWait = false,
         array $args = [],
+        ?float $timeout = null,
     ): void;
 
     /**
@@ -88,6 +90,7 @@ interface ThumperInterface
         bool $exclusive = false,
         bool $noWait = false,
         array $args = [],
+        ?float $timeout = null,
     ): void;
 
     /**
@@ -102,5 +105,6 @@ interface ThumperInterface
         string $key,
         bool $noWait = false,
         array $args = [],
+        ?float $timeout = null,
     ): void;
 }

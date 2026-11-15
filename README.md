@@ -79,13 +79,26 @@ If you retry after either exception, your consumer must handle duplicate message
 
 ```php
 try {
-    $thumper->publish('orders', 'order.created', 'application/json', $body);
+    $thumper->publish('orders', 'order.created', 'application/json', $body, timeout: 5.0);
 } catch (TimeoutException | ConnectionException $e) {
     // The outcome can be unknown. A retry can send a duplicate message.
 } catch (ThumperException $e) {
     // Inspect the exception type and AMQP reply code.
 }
 ```
+
+All four methods accept an optional last parameter, `?float $timeout = null`, in seconds.
+The client sends a supplied timeout as an integer number of nanoseconds.
+`null` omits the field and uses the plugin default of 30 seconds.
+Non-positive and non-finite values throw `\InvalidArgumentException` before the RPC call.
+Values that exceed the integer range also throw `\InvalidArgumentException`.
+Positive values below one nanosecond use one nanosecond.
+The Go timeout covers acquiring a channel and waiting for its confirm.
+An AMQP frame write or synchronous declaration already in progress can continue beyond that timeout.
+
+Adding `$timeout` to `ThumperInterface` is a backward compatibility break for custom implementations.
+Update all custom implementations with the optional last parameter on `publish`, `exchangeDeclare`, `queueDeclare`, and `bindQueue`.
+Existing callers can omit the parameter.
 
 ## Development
 
