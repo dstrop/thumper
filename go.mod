@@ -10,6 +10,7 @@ require (
 	github.com/roadrunner-server/api-plugins/v6 v6.0.0
 	github.com/roadrunner-server/config/v6 v6.0.0
 	github.com/roadrunner-server/errors v1.6.0
+	github.com/roadrunner-server/goridge/v4 v4.0.0
 	github.com/roadrunner-server/pool/v2 v2.0.0
 	github.com/shirou/gopsutil v3.21.11+incompatible
 )
@@ -28,7 +29,6 @@ require (
 	github.com/prometheus/common v0.66.1 // indirect
 	github.com/prometheus/procfs v0.16.1 // indirect
 	github.com/roadrunner-server/events v1.0.1 // indirect
-	github.com/roadrunner-server/goridge/v4 v4.0.0 // indirect
 	github.com/sagikazarmark/locafero v0.12.0 // indirect
 	github.com/spf13/afero v1.15.0 // indirect
 	github.com/spf13/cast v1.10.0 // indirect

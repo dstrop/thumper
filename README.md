@@ -59,13 +59,31 @@ All of them are in the `Thumper\Exception` namespace and extend `ThumperExceptio
 The four AMQP code exceptions extend `AmqpException`.
 `ThumperException` extends goridge's `ServiceException`, which is still what other plugin errors are thrown as.
 
+For `publish`, these exceptions mean that the broker did not accept the message:
+
+- `PublishNackedException`
+- `NotFoundException`
+- `AccessRefusedException`
+- `ResourceLockedException`
+- `PreconditionFailedException`
+
+A publisher confirm is the broker acknowledgement of a message.
+The client keeps each channel until its confirm arrives.
+If the broker closes the channel, the client reports the AMQP reply code instead of a nack.
+A nack means that the broker rejects the message.
+
+`TimeoutException` means that the outcome is unknown.
+`ConnectionException` after the client sends the frame also means that the outcome is unknown.
+The broker can accept the message before the connection fails or before the confirm arrives.
+If you retry after either exception, your consumer must handle duplicate messages.
+
 ```php
 try {
     $thumper->publish('orders', 'order.created', 'application/json', $body);
 } catch (TimeoutException | ConnectionException $e) {
-    // the broker is unreachable or slow, try again later
+    // The outcome can be unknown. A retry can send a duplicate message.
 } catch (ThumperException $e) {
-    // the broker refused the message
+    // Inspect the exception type and AMQP reply code.
 }
 ```
 

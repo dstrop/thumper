@@ -15,9 +15,11 @@
     "require-dev": {
         "php": "^8.2",
         "phpstan/phpstan": "^2.0",
+        "phpunit/phpunit": "^11.5",
         "friendsofphp/php-cs-fixer": "^3.0"
     },
     "scripts": {
+        "test": "vendor/bin/phpunit",
         "phpcs": "vendor/bin/php-cs-fixer check --diff",
         "phpcs-fix": "vendor/bin/php-cs-fixer fix",
         "phpstan": "vendor/bin/phpstan analyse src --level=9"
